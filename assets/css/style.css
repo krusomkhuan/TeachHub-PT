@@ -1,0 +1,477 @@
+/* =====================================================================
+   ไฟล์: assets/css/style.css
+   สไตล์หลักของ TeachHub PT — โทนน้ำเงินกรมท่า + ส้ม
+   สีหลักกำหนดผ่านตัวแปร --th-primary / --th-accent (ตั้งค่าได้จากระบบ)
+   ===================================================================== */
+
+:root {
+    --th-primary: #1b2a4e;
+    --th-accent: #f47b20;
+    --th-bg: #f4f6fb;
+    --th-text: #1f2937;
+    --th-muted: #6b7280;
+    --th-radius: 14px;
+    --th-shadow: 0 6px 24px rgba(27, 42, 78, .08);
+}
+
+html, body {
+    font-family: 'Sarabun', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    color: var(--th-text);
+    background: var(--th-bg);
+}
+
+a { color: var(--th-primary); }
+a:hover { color: var(--th-accent); }
+
+/* ---------- ปุ่มตามธีม ---------- */
+.btn-primary {
+    --bs-btn-bg: var(--th-primary);
+    --bs-btn-border-color: var(--th-primary);
+    --bs-btn-hover-bg: #12203d;
+    --bs-btn-hover-border-color: #12203d;
+    --bs-btn-active-bg: #0e1930;
+    --bs-btn-active-border-color: #0e1930;
+}
+.btn-accent {
+    background: var(--th-accent);
+    border-color: var(--th-accent);
+    color: #fff;
+}
+.btn-accent:hover, .btn-accent:focus {
+    background: #d9650f;
+    border-color: #d9650f;
+    color: #fff;
+}
+.text-primary-th { color: var(--th-primary) !important; }
+.text-accent { color: var(--th-accent) !important; }
+.bg-primary-th { background: var(--th-primary) !important; color: #fff; }
+.bg-accent { background: var(--th-accent) !important; color: #fff; }
+
+.form-control:focus, .form-select:focus {
+    border-color: var(--th-accent);
+    box-shadow: 0 0 0 .2rem rgba(244, 123, 32, .2);
+}
+
+/* ---------- ป้ายสถานะงาน ---------- */
+.badge-status { font-weight: 500; padding: .4em .7em; border-radius: 20px; }
+.badge-pending  { background: #ffc107; color: #3d2f00; }   /* รอตรวจ = เหลือง */
+.badge-approved { background: #198754; color: #fff; }      /* ผ่าน = เขียว */
+.badge-revision { background: #dc3545; color: #fff; }      /* ให้แก้ไข = แดง */
+.badge-late     { background: #fd7e14; color: #fff; }      /* ส่งช้า = ส้ม */
+.badge-none     { background: #adb5bd; color: #fff; }      /* ยังไม่ส่ง = เทา */
+
+/* =====================================================================
+   หน้ากลุ่มยืนยันตัวตน (login / register / forgot / change password)
+   ===================================================================== */
+.auth-body { min-height: 100vh; background: var(--th-bg); }
+
+.auth-wrapper {
+    display: flex;
+    min-height: 100vh;
+}
+
+.auth-brand {
+    flex: 0 0 42%;
+    background:
+        radial-gradient(circle at 15% 20%, rgba(244, 123, 32, .35), transparent 40%),
+        radial-gradient(circle at 85% 85%, rgba(255, 255, 255, .08), transparent 40%),
+        linear-gradient(160deg, var(--th-primary) 0%, #0e1930 100%);
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 3rem 2.5rem;
+    position: relative;
+    overflow: hidden;
+}
+.auth-brand::after {
+    content: '';
+    position: absolute;
+    bottom: -80px; right: -80px;
+    width: 260px; height: 260px;
+    border: 40px solid rgba(244, 123, 32, .18);
+    border-radius: 50%;
+}
+.auth-brand-inner { color: #fff; text-align: center; z-index: 1; }
+.auth-brand-inner:hover { color: #fff; }
+.auth-logo {
+    width: 110px; height: 110px;
+    object-fit: contain;
+    background: #fff;
+    border-radius: 50%;
+    padding: 10px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, .25);
+    margin-bottom: 1rem;
+}
+.auth-college { font-size: 1.05rem; opacity: .85; }
+.auth-system {
+    font-size: 2.6rem;
+    font-weight: 700;
+    margin: .25rem 0;
+    letter-spacing: .5px;
+}
+.auth-system::after {
+    content: '';
+    display: block;
+    width: 60px; height: 4px;
+    background: var(--th-accent);
+    border-radius: 4px;
+    margin: .5rem auto 0;
+}
+.auth-fullname { font-size: 1.05rem; opacity: .9; margin-top: .5rem; }
+.auth-slogan {
+    margin-top: 1rem;
+    font-size: 1.15rem;
+    color: #ffd2ad;
+    font-weight: 500;
+}
+.auth-features {
+    list-style: none;
+    padding: 0;
+    margin: 2.5rem 0 0;
+    z-index: 1;
+}
+.auth-features li {
+    padding: .45rem 0;
+    opacity: .9;
+}
+.auth-features i {
+    color: var(--th-accent);
+    margin-right: .5rem;
+    font-size: 1.1rem;
+}
+
+.auth-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 1rem;
+}
+.auth-card {
+    width: 100%;
+    max-width: 440px;
+    background: #fff;
+    border-radius: var(--th-radius);
+    box-shadow: var(--th-shadow);
+    padding: 2.25rem 2rem;
+    border-top: 5px solid var(--th-accent);
+}
+.auth-card-wide { max-width: 760px; }
+.auth-title {
+    font-weight: 700;
+    color: var(--th-primary);
+    margin-bottom: .25rem;
+}
+.auth-subtitle { color: var(--th-muted); margin-bottom: 1.5rem; }
+.auth-footer {
+    margin-top: 1.5rem;
+    font-size: .85rem;
+    color: var(--th-muted);
+    text-align: center;
+}
+.input-group-text { background: #f8f9fc; }
+.toggle-password { cursor: pointer; }
+
+.pw-strength { height: 6px; border-radius: 6px; background: #e5e7eb; overflow: hidden; }
+.pw-strength > div { height: 100%; width: 0; transition: width .25s, background .25s; }
+
+/* =====================================================================
+   หลังบ้าน: Layout + Sidebar + Topbar
+   ===================================================================== */
+.app-body { background: var(--th-bg); }
+.app-layout { display: flex; min-height: 100vh; }
+
+.app-sidebar {
+    width: 260px;
+    flex-shrink: 0;
+    background: linear-gradient(180deg, var(--th-primary) 0%, #111c36 100%);
+    color: #cfd6e6;
+    display: flex;
+    flex-direction: column;
+}
+@media (min-width: 992px) {
+    .app-sidebar {
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        overflow-y: auto;
+    }
+}
+@media (max-width: 991.98px) {
+    .app-sidebar.offcanvas-lg { width: 270px; background: linear-gradient(180deg, var(--th-primary) 0%, #111c36 100%); }
+}
+.sidebar-brand {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    padding: 1.1rem 1.1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, .08);
+}
+.sidebar-logo {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: #fff;
+    padding: 4px;
+    object-fit: contain;
+}
+.sidebar-title { color: #fff; font-weight: 700; font-size: 1.15rem; }
+.sidebar-sub { color: #ffb37a; font-size: .78rem; }
+.sidebar-nav { padding: .75rem .6rem 1rem; flex: 1; }
+.sidebar-heading {
+    font-size: .72rem;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: rgba(255, 255, 255, .45);
+    margin: 1rem .75rem .35rem;
+}
+.sidebar-link {
+    display: flex;
+    align-items: center;
+    gap: .7rem;
+    padding: .55rem .8rem;
+    border-radius: 10px;
+    color: #d7deec;
+    text-decoration: none;
+    font-size: .95rem;
+    margin-bottom: 2px;
+    transition: background .15s, color .15s;
+}
+.sidebar-link i { font-size: 1.05rem; width: 1.2rem; text-align: center; }
+.sidebar-link:hover { background: rgba(255, 255, 255, .08); color: #fff; }
+.sidebar-link.active {
+    background: var(--th-accent);
+    color: #fff;
+    box-shadow: 0 4px 14px rgba(244, 123, 32, .35);
+}
+.sidebar-link.disabled { opacity: .45; cursor: not-allowed; }
+.sidebar-link.disabled:hover { background: transparent; color: #d7deec; }
+.sidebar-footer {
+    font-size: .75rem;
+    padding: .9rem 1.1rem;
+    border-top: 1px solid rgba(255, 255, 255, .08);
+    color: rgba(255, 255, 255, .55);
+}
+
+.app-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.app-topbar {
+    display: flex;
+    align-items: center;
+    background: #fff;
+    padding: .65rem 1.5rem;
+    border-bottom: 1px solid #e7eaf2;
+    position: sticky;
+    top: 0;
+    z-index: 1020;
+}
+.app-content { padding: 1.5rem; flex: 1; }
+.app-footer {
+    padding: 1rem 1.5rem;
+    font-size: .85rem;
+    color: var(--th-muted);
+    border-top: 1px solid #e7eaf2;
+    background: #fff;
+}
+@media (max-width: 575.98px) {
+    .app-content { padding: 1rem; }
+    .app-topbar { padding: .6rem 1rem; }
+}
+
+.avatar-sm { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 2px solid #eef1f7; }
+.avatar-md { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; }
+.avatar-lg { width: 130px; height: 130px; border-radius: 50%; object-fit: cover; border: 4px solid #fff; box-shadow: var(--th-shadow); }
+
+.page-title { font-size: 1.5rem; font-weight: 700; color: var(--th-primary); margin: 0; }
+.breadcrumb { --bs-breadcrumb-divider: '›'; }
+
+/* ---------- การ์ด ---------- */
+.card {
+    border: 0;
+    border-radius: var(--th-radius);
+    box-shadow: var(--th-shadow);
+}
+.card-header {
+    background: #fff;
+    border-bottom: 1px solid #eef1f7;
+    font-weight: 600;
+    color: var(--th-primary);
+    border-radius: var(--th-radius) var(--th-radius) 0 0 !important;
+    padding: .9rem 1.25rem;
+}
+
+/* การ์ดสรุปตัวเลข */
+.stat-card {
+    position: relative;
+    overflow: hidden;
+    padding: 1.15rem 1.25rem;
+    border-radius: var(--th-radius);
+    background: #fff;
+    box-shadow: var(--th-shadow);
+    height: 100%;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    text-decoration: none;
+    color: inherit;
+    transition: transform .15s;
+}
+a.stat-card:hover { transform: translateY(-3px); color: inherit; }
+.stat-icon {
+    width: 54px; height: 54px;
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.6rem;
+    flex-shrink: 0;
+}
+.stat-value { font-size: 1.75rem; font-weight: 700; line-height: 1.1; color: var(--th-primary); }
+.stat-label { color: var(--th-muted); font-size: .9rem; }
+.stat-sub { font-size: .8rem; color: var(--th-muted); }
+.ic-navy   { background: rgba(27, 42, 78, .1);  color: var(--th-primary); }
+.ic-orange { background: rgba(244, 123, 32, .14); color: var(--th-accent); }
+.ic-green  { background: rgba(25, 135, 84, .12);  color: #198754; }
+.ic-yellow { background: rgba(255, 193, 7, .18);  color: #b58500; }
+.ic-red    { background: rgba(220, 53, 69, .12);  color: #dc3545; }
+.ic-blue   { background: rgba(13, 110, 253, .1);  color: #0d6efd; }
+.ic-purple { background: rgba(111, 66, 193, .12); color: #6f42c1; }
+
+/* รายการงานใกล้ปิด */
+.deadline-item {
+    display: flex;
+    align-items: center;
+    gap: .9rem;
+    padding: .85rem 1.25rem;
+    border-bottom: 1px solid #f0f2f7;
+}
+.deadline-item:last-child { border-bottom: 0; }
+.deadline-item.urgent { background: #fff5f5; border-left: 4px solid #dc3545; }
+.deadline-icon {
+    width: 42px; height: 42px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.25rem; flex-shrink: 0;
+}
+.countdown-box { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.chart-box { position: relative; height: 300px; }
+.chart-box-sm { position: relative; height: 240px; }
+
+.table > :not(caption) > * > * { vertical-align: middle; }
+.table thead th { background: #f6f8fc; color: var(--th-primary); font-weight: 600; white-space: nowrap; }
+.empty-state { text-align: center; padding: 2rem 1rem; color: var(--th-muted); }
+.empty-state i { font-size: 2.5rem; display: block; margin-bottom: .5rem; opacity: .5; }
+
+.progress-thin { height: 8px; border-radius: 8px; }
+
+/* =====================================================================
+   หน้าบ้าน (Public)
+   ===================================================================== */
+.pub-navbar {
+    background: var(--th-primary);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, .15);
+}
+.pub-navbar .navbar-brand img { width: 40px; height: 40px; border-radius: 50%; background: #fff; padding: 3px; }
+.pub-navbar .nav-link { color: rgba(255, 255, 255, .85); }
+.pub-navbar .nav-link:hover, .pub-navbar .nav-link.active { color: #fff; }
+.pub-navbar .nav-link.active { box-shadow: inset 0 -3px 0 var(--th-accent); }
+
+.hero {
+    background:
+        radial-gradient(circle at 10% 10%, rgba(244, 123, 32, .35), transparent 35%),
+        radial-gradient(circle at 90% 90%, rgba(255, 255, 255, .07), transparent 40%),
+        linear-gradient(150deg, var(--th-primary) 0%, #0e1930 100%);
+    color: #fff;
+    padding: 4rem 0 5.5rem;
+    position: relative;
+    overflow: hidden;
+}
+.hero-logo {
+    width: 120px; height: 120px;
+    border-radius: 50%;
+    background: #fff;
+    padding: 10px;
+    object-fit: contain;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .3);
+}
+.hero h1 { font-size: 3rem; font-weight: 700; }
+.hero .slogan { color: #ffd2ad; font-size: 1.35rem; font-weight: 500; }
+.hero-stats { margin-top: -3.5rem; position: relative; z-index: 2; }
+@media (max-width: 767.98px) {
+    .hero { padding: 2.5rem 0 4.5rem; text-align: center; }
+    .hero h1 { font-size: 2.2rem; }
+    .hero-logo { width: 90px; height: 90px; }
+}
+.section-title {
+    font-weight: 700;
+    color: var(--th-primary);
+    position: relative;
+    padding-left: .9rem;
+    margin-bottom: 1.25rem;
+}
+.section-title::before {
+    content: '';
+    position: absolute;
+    left: 0; top: .2em; bottom: .2em;
+    width: 5px;
+    border-radius: 4px;
+    background: var(--th-accent);
+}
+.news-item { padding: 1rem 1.25rem; border-bottom: 1px solid #f0f2f7; display: block; color: inherit; text-decoration: none; }
+.news-item:last-child { border-bottom: 0; }
+.news-item:hover { background: #fafbfe; color: inherit; }
+.news-title { font-weight: 600; color: var(--th-primary); }
+.round-card { border-top: 4px solid var(--th-accent); }
+.round-card.urgent { border-top-color: #dc3545; }
+.round-card.upcoming { border-top-color: #0dcaf0; }
+.round-card.closed { border-top-color: #6c757d; }
+
+/* ปฏิทินรายเดือน */
+.cal-table { table-layout: fixed; }
+.cal-table th { text-align: center; background: var(--th-primary) !important; color: #fff !important; }
+.cal-table td { height: 105px; vertical-align: top !important; padding: .35rem !important; font-size: .82rem; }
+.cal-table td.other-month { background: #f8f9fb; color: #b5bccb; }
+.cal-table td.today { background: #fff8f1; box-shadow: inset 0 0 0 2px var(--th-accent); }
+.cal-day { font-weight: 600; }
+.cal-event {
+    display: block;
+    border-radius: 6px;
+    padding: 1px 5px;
+    margin-top: 3px;
+    font-size: .74rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #fff;
+}
+.cal-event.open { background: #198754; }
+.cal-event.close { background: #dc3545; }
+@media (max-width: 767.98px) {
+    .cal-table td { height: 64px; font-size: .7rem; }
+    .cal-event { font-size: .62rem; padding: 0 3px; }
+}
+
+.pub-footer { background: #0e1930; color: rgba(255, 255, 255, .7); padding: 2rem 0 1.25rem; font-size: .9rem; }
+.pub-footer a { color: #ffb37a; }
+
+/* การพิมพ์ */
+@media print {
+    .app-sidebar, .app-topbar, .app-footer, .no-print, .pub-navbar, .pub-footer { display: none !important; }
+    .app-content { padding: 0; }
+    .dt-length, .dt-search, .dt-paging, .dt-info, .page-head .ms-auto { display: none !important; }
+    .stat-card { box-shadow: none; border: 1px solid #ddd; }
+    .chart-box { height: 260px; }
+    .card { box-shadow: none; border: 1px solid #ddd; }
+    body { background: #fff; }
+}
+
+/* มือถือ: ย่อส่วนแบรนด์ไว้ด้านบน */
+@media (max-width: 991.98px) {
+    .auth-wrapper { flex-direction: column; }
+    .auth-brand { flex: none; padding: 2rem 1rem 2.5rem; }
+    .auth-logo { width: 80px; height: 80px; }
+    .auth-system { font-size: 2rem; }
+    .auth-main { justify-content: flex-start; margin-top: -1.5rem; }
+    .auth-card { padding: 1.75rem 1.25rem; }
+}
+
+.pub-navbar .nav-link, .pub-navbar .btn { white-space: nowrap; }

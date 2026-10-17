@@ -1,0 +1,38 @@
+# =====================================================================
+# ไฟล์: uploads/.htaccess
+# ป้องกันการเข้าถึงไฟล์อัปโหลดโดยตรง และห้ามรันสคริปต์ทุกชนิดในโฟลเดอร์นี้
+# ไฟล์ทั้งหมดต้องดาวน์โหลดผ่านสคริปต์ที่ตรวจสิทธิ์เท่านั้น
+# =====================================================================
+
+# ห้ามแสดงรายการไฟล์
+Options -Indexes -ExecCGI
+
+# ห้ามเข้าถึงไฟล์ใด ๆ โดยตรง (Apache 2.4)
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+
+# ห้ามเข้าถึงไฟล์ใด ๆ โดยตรง (Apache 2.2)
+<IfModule !mod_authz_core.c>
+    Order deny,allow
+    Deny from all
+</IfModule>
+
+# ปิดการประมวลผล PHP (กันไว้อีกชั้น กรณีกฎด้านบนถูกปิด)
+<IfModule mod_php.c>
+    php_flag engine off
+</IfModule>
+<IfModule mod_php7.c>
+    php_flag engine off
+</IfModule>
+<IfModule mod_php8.c>
+    php_flag engine off
+</IfModule>
+
+# ไม่ให้ไฟล์สคริปต์ถูกตีความเป็นโปรแกรม
+RemoveHandler .php .phtml .php3 .php4 .php5 .php7 .php8 .phar .pl .py .cgi .sh .asp .aspx .jsp
+RemoveType .php .phtml .php3 .php4 .php5 .php7 .php8 .phar
+<FilesMatch "\.(php|phtml|php\d|phar|pl|py|cgi|sh|asp|aspx|jsp)$">
+    SetHandler none
+    ForceType text/plain
+</FilesMatch>

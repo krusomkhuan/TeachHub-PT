@@ -1,0 +1,30 @@
+# =====================================================================
+# ไฟล์: .htaccess (root ของระบบ)
+# =====================================================================
+Options -Indexes
+DirectoryIndex index.php
+
+AddDefaultCharset UTF-8
+
+# ห้ามเข้าถึงไฟล์ฐานข้อมูล ไฟล์ log และไฟล์ซ่อนผ่านเว็บ
+<FilesMatch "\.(sql|log|ini|bak|md|lock|env)$|^\.">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order deny,allow
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# ค่าอัปโหลดไฟล์ (ใช้ได้เมื่อ PHP ทำงานเป็น Apache module หากโฮสติ้งไม่รองรับให้ตั้งใน php.ini / .user.ini)
+<IfModule mod_php.c>
+    php_value upload_max_filesize 32M
+    php_value post_max_size 40M
+    php_value max_execution_time 120
+</IfModule>
+<IfModule mod_php8.c>
+    php_value upload_max_filesize 32M
+    php_value post_max_size 40M
+    php_value max_execution_time 120
+</IfModule>
