@@ -56,9 +56,9 @@ require APP_ROOT . '/includes/public_header.php';
                 <img src="<?= e($logo) ?>" alt="โลโก้<?= e(college_name()) ?>" class="hero-logo">
             </div>
             <div class="col-md">
-                <div class="opacity-75 mb-1"><?= e(college_name()) ?> · <?= e(setting('department_name', 'งานพัฒนาหลักสูตรและการจัดการเรียนรู้')) ?></div>
+                <div class="opacity-75 mb-1"><?= e(college_name()) ?></div>
                 <h1 class="mb-1"><?= e(system_name()) ?></h1>
-                <div class="fs-5 mb-2"><?= e(setting('system_fullname', 'ระบบงานพัฒนาหลักสูตรและการจัดการเรียนรู้')) ?></div>
+                <div class="fs-5 mb-2"><?= e(setting('system_fullname', 'ระบบการส่งงานและรายงานกิจกรรม')) ?></div>
                 <div class="slogan mb-4">“<?= e(setting('slogan', 'ทุกงานวิชาการครบ จบในที่เดียว')) ?>”</div>
                 <div class="d-flex flex-wrap gap-2 justify-content-center justify-content-md-start">
                     <?php if ($viewer): ?>

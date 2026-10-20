@@ -15,9 +15,10 @@ function academic_year_usage(int $id): int
         'SELECT (SELECT COUNT(*) FROM submission_rounds WHERE academic_year_id = ?)
               + (SELECT COUNT(*) FROM supervision_schedules WHERE academic_year_id = ?)
               + (SELECT COUNT(*) FROM lesson_plans WHERE academic_year_id = ?)
-              + (SELECT COUNT(*) FROM research_submissions WHERE academic_year_id = ?)',
-        'iiii',
-        [$id, $id, $id, $id]
+              + (SELECT COUNT(*) FROM research_submissions WHERE academic_year_id = ?)
+              + (SELECT COUNT(*) FROM advisor_groups WHERE academic_year_id = ?)',
+        'iiiii',
+        [$id, $id, $id, $id, $id]
     );
 }
 
@@ -79,7 +80,7 @@ if (is_post()) {
     }
     if ($action === 'delete') {
         if (academic_year_usage($id) > 0) {
-            flash('error', 'ลบไม่ได้ เพราะมีรอบการส่ง/งาน/ตารางนิเทศอ้างอิงภาคเรียนนี้');
+            flash('error', 'ลบไม่ได้ เพราะมีรอบการส่ง/งาน/ตารางนิเทศ/กลุ่มที่ปรึกษาอ้างอิงภาคเรียนนี้');
         } else {
             db_exec('DELETE FROM academic_years WHERE id = ?', 'i', [$id]);
             log_activity('academic_year_delete', 'ลบภาคเรียน #' . $id);

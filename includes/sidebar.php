@@ -144,6 +144,39 @@ if ($user['role'] === 'teacher' && ($reviewTypes = designated_review_types($user
     }
     $roleMenu = array_slice($roleMenu, 0, 1, true) + ['ตรวจงาน (ตามตำแหน่ง)' => $reviewMenu] + array_slice($roleMenu, 1, null, true);
 }
+// รายงานครูที่ปรึกษา: ครูที่ได้รับมอบหมายกลุ่มที่ปรึกษา / ผู้ตรวจ (admin + งานครูที่ปรึกษาฯ ตามตำแหน่ง) / ผู้ดูสรุป
+if (in_array($user['role'], teacher_roles(), true) && is_advisor_teacher((int)$user['id'])) {
+    $advisorMenu = [['รายงานการพบนักเรียน', 'teacher/advisor_reports.php', 'bi-people'], ['รายงานการเยี่ยมบ้าน', 'teacher/home_visits.php', 'bi-house-heart']];
+    $badgeCounts['teacher/home_visits.php'] = (int)db_value(
+        "SELECT COUNT(*) FROM home_visits WHERE teacher_id = ? AND status = 'revision'",
+        'i',
+        [(int)$user['id']]
+    );
+    $badgeCounts['teacher/advisor_reports.php'] = (int)db_value(
+        "SELECT COUNT(*) FROM advisor_reports WHERE teacher_id = ? AND status = 'revision'",
+        'i',
+        [(int)$user['id']]
+    );
+    $roleMenu = array_slice($roleMenu, 0, 2, true) + ['ครูที่ปรึกษา' => $advisorMenu] + array_slice($roleMenu, 2, null, true);
+}
+if (can_manage_advisor($user)) {
+    $badgeCounts['review/advisor_reports.php'] = advisor_pending_count($user['role'] === 'admin' ? 0 : (int)$user['id']);
+    $badgeCounts['review/home_visits.php'] = home_visit_pending_count($user['role'] === 'admin' ? 0 : (int)$user['id']);
+    $advisorMenu = [$user['role'] === 'admin' ? 'งานครูที่ปรึกษา' : 'งานครูที่ปรึกษา (ตามตำแหน่ง)' => [
+        ['รายงานกิจกรรมโฮมรูม', 'review/advisor_reports.php', 'bi-clipboard-check'],
+        ['กลุ่มที่ปรึกษา / วันงดพบ', 'review/advisor_groups.php', 'bi-diagram-3'],
+        ['สรุปรายงานครูที่ปรึกษา', 'reports/advisor_summary.php', 'bi-bar-chart-line'],
+        ['รายงานการเยี่ยมบ้าน', 'review/home_visits.php', 'bi-house-check'],
+        ['สรุปการเยี่ยมบ้าน', 'reports/home_visit_summary.php', 'bi-house-heart'],
+    ]];
+    // วางต่อจากกลุ่ม "นิเทศการสอน" (admin) หรือต่อจากแดชบอร์ด
+    $advisorPos = array_search('นิเทศการสอน', array_keys($roleMenu), true);
+    $advisorPos = ($user['role'] === 'admin' && $advisorPos !== false) ? $advisorPos + 1 : 1;
+    $roleMenu = array_slice($roleMenu, 0, $advisorPos, true) + $advisorMenu + array_slice($roleMenu, $advisorPos, null, true);
+} elseif (in_array($user['role'], ['executive', 'supervisor'], true)) {
+    $roleMenu['รายงาน'][] = ['สรุปรายงานครูที่ปรึกษา', 'reports/advisor_summary.php', 'bi-people'];
+    $roleMenu['รายงาน'][] = ['สรุปการเยี่ยมบ้าน', 'reports/home_visit_summary.php', 'bi-house-heart'];
+}
 // path ของหน้าปัจจุบันเทียบกับ root ของระบบ เช่น admin/users.php
 $currentPath = ltrim(substr(str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? ''), strlen(BASE_URL)), '/');
 $activeMenu = $activeMenu ?? $currentPath; // หน้าย่อยกำหนด $activeMenu เพื่อไฮไลต์เมนูแม่ได้
@@ -210,4 +243,4 @@ $activeMenu = $activeMenu ?? $currentPath; // หน้าย่อยกำห�
 </aside>
 <?php
 // ล้างตัวแปรภายในของเมนู ไม่ให้ไปทับตัวแปรชื่อเดียวกันของหน้าที่เรียกใช้
-unset($boardOpen, $reviewTypes, $reviewMenu, $reviewLabels, $rt, $badgeCounts, $menus, $roleMenu, $currentPath, $group, $items, $label, $path, $icon, $exists, $active, $count);
+unset($boardOpen, $advisorMenu, $advisorPos, $reviewTypes, $reviewMenu, $reviewLabels, $rt, $badgeCounts, $menus, $roleMenu, $currentPath, $group, $items, $label, $path, $icon, $exists, $active, $count);

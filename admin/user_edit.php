@@ -195,8 +195,8 @@ require APP_ROOT . '/includes/header.php';
                         <div class="col-md-4">
                             <label class="form-label" for="position">ตำแหน่ง</label>
                             <input class="form-control" name="position" id="position" value="<?= e($val('position')) ?>" maxlength="100" list="positionList">
-                            <datalist id="positionList"><?php foreach (array_merge(position_options(), reviewer_position_list()) as $p): ?><option value="<?= e($p) ?>"><?php endforeach; ?></datalist>
-                            <div class="form-text">ตำแหน่งผู้ตรวจงาน: <?= e(implode(' · ', reviewer_position_list())) ?> (ได้สิทธิ์ตรวจงานตามประเภทอัตโนมัติ)</div>
+                            <datalist id="positionList"><?php foreach (array_merge(position_options(), reviewer_position_list(), advisor_staff_positions()) as $p): ?><option value="<?= e($p) ?>"><?php endforeach; ?></datalist>
+                            <div class="form-text">ตำแหน่งผู้ตรวจงาน: <?= e(implode(' · ', reviewer_position_list())) ?> (ได้สิทธิ์ตรวจงานตามประเภทอัตโนมัติ)<br>ผู้ตรวจรายงานครูที่ปรึกษา: <?= e(implode(' · ', advisor_staff_positions())) ?></div>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label" for="academic_standing">วิทยฐานะ</label>

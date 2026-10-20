@@ -274,7 +274,8 @@ function user_action_form(string $action, int $userId, string $label, string $bt
                                     <?php if (!empty($u['google_sub'])): ?><span class="badge bg-light text-dark border ms-1" title="เชื่อมบัญชี Google แล้ว"><i class="bi bi-google"></i></span><?php endif; ?>
                                     <?php if ($u['position'] !== null && $u['position'] !== ''): ?>
                                         <div class="small text-primary-th"><?= e($u['position']) ?>
-                                            <?php foreach (designated_review_types($u) as $rt): ?><span class="badge bg-info text-dark ms-1">ผู้ตรวจ<?= e(['lesson_plan' => 'โครงการสอน/แผน', 'pa' => ' PA', 'research' => 'วิจัย'][$rt]) ?></span><?php endforeach; ?></div>
+                                            <?php foreach (designated_review_types($u) as $rt): ?><span class="badge bg-info text-dark ms-1">ผู้ตรวจ<?= e(['lesson_plan' => 'โครงการสอน/แผน', 'pa' => ' PA', 'research' => 'วิจัย'][$rt]) ?></span><?php endforeach; ?>
+                                            <?php if (is_advisor_staff($u)): ?><span class="badge bg-info text-dark ms-1">ผู้ตรวจรายงานครูที่ปรึกษา</span><?php endif; ?></div>
                                     <?php endif; ?>
                                 </div>
                             </div>

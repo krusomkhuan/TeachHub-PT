@@ -71,7 +71,7 @@ require APP_ROOT . '/includes/auth_header.php';
         <h5 class="mt-3">ส่งคำขอเรียบร้อยแล้ว</h5>
         <p class="text-muted">หากข้อมูลถูกต้อง ผู้ดูแลระบบจะรีเซ็ตรหัสผ่านและแจ้งรหัสผ่านชั่วคราวให้ท่านทราบ
             เมื่อเข้าสู่ระบบด้วยรหัสชั่วคราวแล้ว ระบบจะให้ตั้งรหัสผ่านใหม่ทันที</p>
-        <p class="small text-muted mb-4">ติดต่อ: <?= e(setting('department_name', 'งานพัฒนาหลักสูตรและการจัดการเรียนรู้')) ?></p>
+        <p class="small text-muted mb-4">ติดต่อผู้ดูแลระบบ</p>
         <a href="<?= e(url('auth/login.php')) ?>" class="btn btn-accent px-4">กลับหน้าเข้าสู่ระบบ</a>
     </div>
 <?php else: ?>

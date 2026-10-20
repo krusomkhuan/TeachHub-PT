@@ -12,12 +12,11 @@ $useChart = $useChart ?? false;
         <div class="row g-4">
             <div class="col-md-6">
                 <h5 class="text-white fw-bold mb-1"><?= e(system_name()) ?></h5>
-                <div><?= e(setting('system_fullname', 'ระบบงานพัฒนาหลักสูตรและการจัดการเรียนรู้')) ?></div>
+                <div><?= e(setting('system_fullname', 'ระบบการส่งงานและรายงานกิจกรรม')) ?></div>
                 <div class="mt-2" style="color:#ffb37a">“<?= e(setting('slogan', 'ทุกงานวิชาการครบ จบในที่เดียว')) ?>”</div>
             </div>
             <div class="col-md-6 text-md-end">
-                <div class="text-white"><?= e(setting('department_name', 'งานพัฒนาหลักสูตรและการจัดการเรียนรู้')) ?></div>
-                <div><?= e(college_name()) ?></div>
+                <div class="text-white"><?= e(college_name()) ?></div>
                 <div class="mt-2">
                     <a href="<?= e(url('public/calendar.php')) ?>">ปฏิทินส่งงาน</a> ·
                     <a href="<?= e(url('public/downloads.php')) ?>">ดาวน์โหลดเอกสาร</a> ·

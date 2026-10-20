@@ -39,7 +39,7 @@ $add('การอัปโหลด', ini_get('file_uploads') ? 'ok' : 'fail', 
 $add('การอัปโหลด', $phpMax >= max_upload_bytes() ? 'ok' : 'warn', 'ขนาดไฟล์สูงสุด',
     'ตั้งค่าในระบบ ' . format_bytes(max_upload_bytes()) . ' · PHP รับได้ ' . format_bytes($phpMax)
     . ' (upload_max_filesize=' . ini_get('upload_max_filesize') . ', post_max_size=' . ini_get('post_max_size') . ')');
-foreach (['lesson_plans', 'pa', 'research', 'supervision', 'avatars', 'downloads', 'system'] as $d) {
+foreach (['lesson_plans', 'pa', 'research', 'supervision', 'advisor', 'home_visit', 'avatars', 'downloads', 'system'] as $d) {
     $path = UPLOAD_PATH . DIRECTORY_SEPARATOR . $d;
     $ok = is_dir($path) && is_writable($path);
     $add('การอัปโหลด', $ok ? 'ok' : 'fail', 'โฟลเดอร์ uploads/' . $d, $ok ? 'เขียนไฟล์ได้' : 'ไม่มีโฟลเดอร์หรือเขียนไม่ได้ — สร้างโฟลเดอร์และตั้งสิทธิ์ 755');
@@ -55,7 +55,9 @@ $add('ฐานข้อมูล', 'ok', 'เวอร์ชัน MySQL/MariaD
 $charset = (string)db_value('SELECT DEFAULT_CHARACTER_SET_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = DATABASE()');
 $add('ฐานข้อมูล', $charset === 'utf8mb4' ? 'ok' : 'warn', 'Charset ของฐานข้อมูล', $charset . ($charset === 'utf8mb4' ? '' : ' (แนะนำ utf8mb4)'));
 $tables = (int)db_value('SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE()');
-$add('ฐานข้อมูล', $tables >= 28 ? 'ok' : 'fail', 'จำนวนตาราง', $tables . ' ตาราง (ต้องมี 28'
+$add('ฐานข้อมูล', $tables >= 34 ? 'ok' : 'fail', 'จำนวนตาราง', $tables . ' ตาราง (ต้องมี 34'
+    . ($tables === 32 ? ' — ยังไม่ได้นำเข้า update_v1.13.sql' : '')
+    . ($tables === 28 ? ' — ยังไม่ได้นำเข้า update_v1.12.sql' : '')
     . ($tables === 26 ? ' — ยังไม่ได้นำเข้า update_v1.11.sql' : '')
     . ($tables === 20 ? ' — ยังไม่ได้นำเข้า update_v1.1.sql และ update_v1.2.sql' : '')
     . ($tables === 23 ? ' — ยังไม่ได้นำเข้า update_v1.2.sql' : '')

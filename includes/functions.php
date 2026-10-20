@@ -931,6 +931,12 @@ function log_action_label(string $action): string
         'report_submit' => 'เสนอรายงานการนิเทศ', 'report_forward' => 'เห็นควรเสนอรายงานการนิเทศ', 'report_approve' => 'ทราบ/อนุมัติรายงานการนิเทศ',
         'report_return' => 'ส่งกลับรายงานการนิเทศ', 'report_print' => 'พิมพ์รายงานการนิเทศ',
         'submit_research' => 'ส่งวิจัย', 'resubmit_research' => 'ส่งวิจัยฉบับแก้ไข', 'delete_research' => 'ลบวิจัย',
+        'advisor_report_submit' => 'ส่งรายงานครูที่ปรึกษา', 'advisor_report_update' => 'แก้ไขรายงานครูที่ปรึกษา',
+        'advisor_report_delete' => 'ลบรายงานครูที่ปรึกษา', 'advisor_report_review' => 'ตรวจรายงานครูที่ปรึกษา',
+        'advisor_group_save' => 'บันทึกกลุ่มที่ปรึกษา', 'advisor_group_delete' => 'ลบกลุ่มที่ปรึกษา',
+        'advisor_skip_save' => 'กำหนดวันงดพบ', 'advisor_skip_delete' => 'ยกเลิกวันงดพบ',
+        'home_visit_submit' => 'ส่งรายงานเยี่ยมบ้าน', 'home_visit_update' => 'แก้ไขรายงานเยี่ยมบ้าน',
+        'home_visit_delete' => 'ลบรายงานเยี่ยมบ้าน', 'home_visit_review' => 'ตรวจรายงานเยี่ยมบ้าน',
     ];
     return $map[$action] ?? $action;
 }

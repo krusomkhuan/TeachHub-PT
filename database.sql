@@ -1,5 +1,5 @@
 -- =====================================================================
--- TeachHub PT — ระบบงานพัฒนาหลักสูตรและการจัดการเรียนรู้
+-- TeachHub PT — ระบบการส่งงานและรายงานกิจกรรม
 -- วิทยาลัยการอาชีพโพนทอง
 -- ไฟล์: database.sql (โครงสร้างฐานข้อมูล + ข้อมูลเริ่มต้นที่จำเป็น)
 -- ผู้พัฒนาระบบ: ครูสมควร สากำ
@@ -18,6 +18,7 @@ SET FOREIGN_KEY_CHECKS = 0;
 
 -- ลบตารางเดิม (กรณีติดตั้งใหม่)
 DROP TABLE IF EXISTS `activity_logs`, `password_reset_requests`, `board_replies`, `board_topics`, `settings`, `downloads`,
+  `home_visit_images`, `home_visits`, `advisor_report_images`, `advisor_reports`, `advisor_skip_dates`, `advisor_groups`,
   `supervision_report_actions`, `supervision_reports`,
   `student_eval_scores`, `student_eval_responses`, `student_eval_sessions`,
   `announcements`, `supervision_images`, `supervision_scores`, `supervision_results`,
@@ -655,6 +656,153 @@ CREATE TABLE `board_replies` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ---------------------------------------------------------------------
+-- 18.2) รายงานการพบนักเรียนของครูที่ปรึกษา (ส่งทุกวันพุธ)
+--       advisor_groups    : กลุ่มเรียนที่ปรึกษารายภาคเรียน (งานครูที่ปรึกษาและแนะแนวเป็นผู้กำหนด)
+--       advisor_reports   : 1 กลุ่ม ต่อ 1 วันพุธ  status: pending (รอตรวจ) / approved (ผ่าน) / revision (ให้แก้ไข)
+--       advisor_skip_dates: วันพุธที่งดพบ ไม่นับเป็นขาดส่ง
+-- ---------------------------------------------------------------------
+CREATE TABLE `advisor_groups` (
+  `id`                INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `academic_year_id`  INT UNSIGNED NOT NULL,
+  `teacher_id`        INT UNSIGNED NOT NULL COMMENT 'ครูที่ปรึกษา',
+  `department_id`     INT UNSIGNED NULL COMMENT 'แผนกของกลุ่มเรียน',
+  `group_name`        VARCHAR(100) NOT NULL COMMENT 'ชื่อกลุ่มเรียน เช่น ปวช.1/1 ช่างยนต์',
+  `student_count`     SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+  `created_by`        INT UNSIGNED NULL,
+  `created_at`        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`        DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_advisor_group` (`academic_year_id`, `teacher_id`, `group_name`),
+  KEY `idx_advisor_group_teacher` (`teacher_id`),
+  KEY `idx_advisor_group_dept` (`department_id`),
+  CONSTRAINT `fk_advisor_group_ay` FOREIGN KEY (`academic_year_id`)
+    REFERENCES `academic_years` (`id`) ON UPDATE CASCADE ON DELETE RESTRICT,
+  CONSTRAINT `fk_advisor_group_teacher` FOREIGN KEY (`teacher_id`)
+    REFERENCES `users` (`id`) ON UPDATE CASCADE ON DELETE RESTRICT,
+  CONSTRAINT `fk_advisor_group_dept` FOREIGN KEY (`department_id`)
+    REFERENCES `departments` (`id`) ON UPDATE CASCADE ON DELETE SET NULL,
+  CONSTRAINT `fk_advisor_group_created_by` FOREIGN KEY (`created_by`)
+    REFERENCES `users` (`id`) ON UPDATE CASCADE ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `advisor_reports` (
+  `id`              INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `group_id`        INT UNSIGNED NOT NULL,
+  `teacher_id`      INT UNSIGNED NOT NULL,
+  `meet_date`       DATE NOT NULL COMMENT 'วันพุธที่พบนักเรียน',
+  `total_students`  SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+  `present_count`   SMALLINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'มา',
+  `late_count`      SMALLINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'มาสาย',
+  `leave_count`     SMALLINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'ลา',
+  `absent_count`    SMALLINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'ขาด',
+  `topics`          TEXT NOT NULL COMMENT 'เรื่องที่พูดคุย/แจ้งนักเรียน',
+  `problems`        TEXT NULL COMMENT 'นักเรียนที่มีปัญหาและการช่วยเหลือ',
+  `status`          ENUM('pending','approved','revision') NOT NULL DEFAULT 'pending',
+  `is_late`         TINYINT(1) NOT NULL DEFAULT 0,
+  `review_comment`  TEXT NULL,
+  `reviewed_by`     INT UNSIGNED NULL,
+  `reviewed_at`     DATETIME NULL,
+  `submitted_at`    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`      DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_advisor_report_week` (`group_id`, `meet_date`),
+  KEY `idx_advisor_report_teacher` (`teacher_id`, `meet_date`),
+  KEY `idx_advisor_report_status` (`status`),
+  KEY `idx_advisor_report_date` (`meet_date`),
+  CONSTRAINT `fk_advisor_report_group` FOREIGN KEY (`group_id`)
+    REFERENCES `advisor_groups` (`id`) ON UPDATE CASCADE ON DELETE RESTRICT,
+  CONSTRAINT `fk_advisor_report_teacher` FOREIGN KEY (`teacher_id`)
+    REFERENCES `users` (`id`) ON UPDATE CASCADE ON DELETE RESTRICT,
+  CONSTRAINT `fk_advisor_report_reviewer` FOREIGN KEY (`reviewed_by`)
+    REFERENCES `users` (`id`) ON UPDATE CASCADE ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `advisor_report_images` (
+  `id`             INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `report_id`      INT UNSIGNED NOT NULL,
+  `original_name`  VARCHAR(255) NOT NULL,
+  `stored_name`    VARCHAR(255) NOT NULL,
+  `mime_type`      VARCHAR(100) NOT NULL,
+  `file_size`      INT UNSIGNED NOT NULL DEFAULT 0,
+  `uploaded_at`    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_advisor_images_stored` (`stored_name`),
+  KEY `idx_advisor_images_report` (`report_id`),
+  CONSTRAINT `fk_advisor_images_report` FOREIGN KEY (`report_id`)
+    REFERENCES `advisor_reports` (`id`) ON UPDATE CASCADE ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `advisor_skip_dates` (
+  `id`          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `skip_date`   DATE NOT NULL,
+  `reason`      VARCHAR(200) NOT NULL DEFAULT '',
+  `created_by`  INT UNSIGNED NULL,
+  `created_at`  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_advisor_skip_date` (`skip_date`),
+  CONSTRAINT `fk_advisor_skip_created_by` FOREIGN KEY (`created_by`)
+    REFERENCES `users` (`id`) ON UPDATE CASCADE ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------
+-- 18.3) รายงานการเยี่ยมบ้านนักเรียนของครูที่ปรึกษา (นักเรียน 1 คน เยี่ยม 1 ครั้งต่อปีการศึกษา)
+--       risk_level: normal (ปกติ) / risk (เสี่ยง) / problem (มีปัญหา)
+--       status    : pending (รอตรวจ) / approved (ผ่าน) / revision (ให้แก้ไข)
+-- ---------------------------------------------------------------------
+CREATE TABLE `home_visits` (
+  `id`                  INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `school_year`         SMALLINT UNSIGNED NOT NULL COMMENT 'ปีการศึกษา (พ.ศ.)',
+  `group_id`            INT UNSIGNED NOT NULL COMMENT 'กลุ่มที่ปรึกษา',
+  `teacher_id`          INT UNSIGNED NOT NULL,
+  `student_code`        VARCHAR(20)  NOT NULL,
+  `student_name`        VARCHAR(150) NOT NULL,
+  `visit_date`          DATE NOT NULL,
+  `informant_name`      VARCHAR(150) NOT NULL DEFAULT '' COMMENT 'ผู้ให้ข้อมูล',
+  `informant_relation`  VARCHAR(50)  NOT NULL DEFAULT '' COMMENT 'ความเกี่ยวข้องกับนักเรียน',
+  `address`             VARCHAR(500) NOT NULL DEFAULT '',
+  `living_with`         VARCHAR(50)  NOT NULL DEFAULT '' COMMENT 'นักเรียนอาศัยอยู่กับ',
+  `economic_status`     ENUM('sufficient','insufficient','poor') NOT NULL DEFAULT 'sufficient' COMMENT 'พอเพียง/ไม่พอเพียง/ขัดสน',
+  `family_info`         TEXT NULL COMMENT 'สภาพครอบครัวและที่อยู่อาศัย',
+  `learning_behavior`   TEXT NULL COMMENT 'ด้านการเรียนและพฤติกรรม',
+  `risk_level`          ENUM('normal','risk','problem') NOT NULL DEFAULT 'normal' COMMENT 'ปกติ/เสี่ยง/มีปัญหา',
+  `assistance`          TEXT NULL COMMENT 'การช่วยเหลือ/ข้อเสนอแนะ',
+  `latitude`            DECIMAL(10,7) NULL,
+  `longitude`           DECIMAL(10,7) NULL,
+  `status`              ENUM('pending','approved','revision') NOT NULL DEFAULT 'pending',
+  `review_comment`      TEXT NULL,
+  `reviewed_by`         INT UNSIGNED NULL,
+  `reviewed_at`         DATETIME NULL,
+  `submitted_at`        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`          DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_home_visit_student_year` (`school_year`, `student_code`),
+  KEY `idx_home_visit_teacher` (`teacher_id`, `school_year`),
+  KEY `idx_home_visit_group` (`group_id`),
+  KEY `idx_home_visit_status` (`status`),
+  CONSTRAINT `fk_home_visit_group` FOREIGN KEY (`group_id`)
+    REFERENCES `advisor_groups` (`id`) ON UPDATE CASCADE ON DELETE RESTRICT,
+  CONSTRAINT `fk_home_visit_teacher` FOREIGN KEY (`teacher_id`)
+    REFERENCES `users` (`id`) ON UPDATE CASCADE ON DELETE RESTRICT,
+  CONSTRAINT `fk_home_visit_reviewer` FOREIGN KEY (`reviewed_by`)
+    REFERENCES `users` (`id`) ON UPDATE CASCADE ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `home_visit_images` (
+  `id`             INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `visit_id`       INT UNSIGNED NOT NULL,
+  `original_name`  VARCHAR(255) NOT NULL,
+  `stored_name`    VARCHAR(255) NOT NULL,
+  `mime_type`      VARCHAR(100) NOT NULL,
+  `file_size`      INT UNSIGNED NOT NULL DEFAULT 0,
+  `uploaded_at`    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_home_visit_images_stored` (`stored_name`),
+  KEY `idx_home_visit_images_visit` (`visit_id`),
+  CONSTRAINT `fk_home_visit_images_visit` FOREIGN KEY (`visit_id`)
+    REFERENCES `home_visits` (`id`) ON UPDATE CASCADE ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------
 -- 19) คำขอรีเซ็ตรหัสผ่าน (ลืมรหัสผ่าน -> admin เป็นผู้รีเซ็ต)
 -- ---------------------------------------------------------------------
 CREATE TABLE `password_reset_requests` (
@@ -779,7 +927,7 @@ INSERT INTO `announcements` (`title`, `content`, `is_pinned`, `created_by`) VALU
 INSERT INTO `settings` (`setting_key`, `setting_value`, `description`) VALUES
 ('college_name',        'วิทยาลัยการอาชีพโพนทอง',                         'ชื่อวิทยาลัย'),
 ('system_name',         'TeachHub PT',                                    'ชื่อระบบ'),
-('system_fullname',     'ระบบงานพัฒนาหลักสูตรและการจัดการเรียนรู้',            'ชื่อเต็มของระบบ'),
+('system_fullname',     'ระบบการส่งงานและรายงานกิจกรรม',            'ชื่อเต็มของระบบ'),
 ('slogan',              'ทุกงานวิชาการครบ จบในที่เดียว',                      'สโลแกน'),
 ('department_name',     'งานพัฒนาหลักสูตรและการจัดการเรียนรู้',                    'ชื่อหน่วยงานที่ดูแลระบบ'),
 ('logo',                '',                                               'ไฟล์โลโก้ (ว่าง = ใช้โลโก้เริ่มต้น)'),
@@ -803,7 +951,8 @@ INSERT INTO `settings` (`setting_key`, `setting_value`, `description`) VALUES
 ('google_enabled',      '0',                                              'เปิดเข้าสู่ระบบ/สมัครสมาชิกด้วยบัญชี Google (1=เปิด)'),
 ('google_client_id',    '',                                               'Google OAuth Client ID'),
 ('google_client_secret','',                                               'Google OAuth Client Secret'),
-('google_allowed_domain','',                                              'จำกัดอีเมล Google เฉพาะโดเมน เช่น pticec.ac.th (ว่าง = ทุกโดเมน)');
+('google_allowed_domain','',                                              'จำกัดอีเมล Google เฉพาะโดเมน เช่น pticec.ac.th (ว่าง = ทุกโดเมน)'),
+('advisor_late_days',   '2',                                              'รายงานครูที่ปรึกษา: ส่งได้ภายในกี่วันหลังวันพุธโดยไม่นับว่าส่งช้า');
 
 -- Log เริ่มต้น
 INSERT INTO `activity_logs` (`user_id`, `action`, `detail`, `ip_address`) VALUES

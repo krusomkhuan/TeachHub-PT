@@ -36,7 +36,7 @@ $logo = logo_url();
             <img src="<?= e($logo) ?>" alt="โลโก้วิทยาลัย" class="auth-logo">
             <div class="auth-college"><?= e(college_name()) ?></div>
             <h1 class="auth-system"><?= e(system_name()) ?></h1>
-            <div class="auth-fullname"><?= e(setting('system_fullname', 'ระบบงานพัฒนาหลักสูตรและการจัดการเรียนรู้')) ?></div>
+            <div class="auth-fullname"><?= e(setting('system_fullname', 'ระบบการส่งงานและรายงานกิจกรรม')) ?></div>
             <div class="auth-slogan">“<?= e(setting('slogan', 'ทุกงานวิชาการครบ จบในที่เดียว')) ?>”</div>
         </a>
         <ul class="auth-features d-none d-lg-block">
