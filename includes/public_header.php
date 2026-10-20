@@ -15,6 +15,8 @@ $navItems = [
     'announcements' => ['ประกาศข่าวสาร', 'public/announcements.php', 'bi-megaphone'],
     'calendar'      => ['ปฏิทินส่งงาน', 'public/calendar.php', 'bi-calendar-event'],
     'downloads'     => ['ดาวน์โหลดเอกสาร', 'public/downloads.php', 'bi-cloud-download'],
+    'docshub'       => ['Docs Hub', 'https://krusomkhuan.com/docshub/', 'bi-journal-text'],
+    'prompthub'     => ['Prompt Hub', 'https://krusomkhuan.com/prompthub/public/', 'bi-stars'],
     'pdpa'          => ['ข้อตกลง PDPA', 'public/pdpa.php', 'bi-shield-check'],
 ];
 ?>
@@ -57,8 +59,9 @@ $navItems = [
         <div class="collapse navbar-collapse" id="pubNav">
             <ul class="navbar-nav ms-auto mb-2 mb-xl-0">
                 <?php foreach ($navItems as $key => [$label, $path, $icon]): ?>
+                    <?php $external = str_starts_with($path, 'https://'); // ลิงก์ไปเว็บอื่น เปิดแท็บใหม่ ?>
                     <li class="nav-item">
-                        <a class="nav-link px-xl-3<?= $activeNav === $key ? ' active' : '' ?>" href="<?= e(url($path)) ?>">
+                        <a class="nav-link px-xl-3<?= $activeNav === $key ? ' active' : '' ?>" href="<?= e($external ? $path : url($path)) ?>"<?= $external ? ' target="_blank" rel="noopener"' : '' ?>>
                             <i class="bi <?= e($icon) ?> me-1"></i><?= e($label) ?>
                         </a>
                     </li>
