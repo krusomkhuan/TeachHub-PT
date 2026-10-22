@@ -24,6 +24,24 @@ $errors = [];
 if (is_post()) {
     csrf_verify();
     $rep = advisor_report_fetch((int)post('id'));
+
+    // ---------- ลบรายงานของครู (ระบุเหตุผล บันทึกใน log) ----------
+    if (post('action') === 'delete') {
+        if (!$rep || !can_delete_advisor_report($user, $rep)) {
+            abort_page(403, 'ไม่มีสิทธิ์ลบรายงานนี้');
+        }
+        $reason = mb_substr(post('delete_reason'), 0, 300);
+        if ($reason === '') {
+            flash('error', 'กรุณาระบุเหตุผลที่ลบรายงาน');
+            redirect($self . '?id=' . (int)$rep['id']);
+        }
+        advisor_report_delete($rep);
+        log_activity('advisor_report_delete', 'ลบรายงานกิจกรรมโฮมรูม ' . $rep['group_name'] . ' วันที่ ' . thai_date($rep['meet_date'])
+            . ' ของ ' . $rep['teacher_name'] . ' (ลบโดยผู้ตรวจ เหตุผล: ' . $reason . ')');
+        flash('success', 'ลบรายงานของ ' . $rep['teacher_name'] . ' วันที่ ' . thai_date($rep['meet_date']) . ' แล้ว — ครูสามารถส่งรายงานของสัปดาห์นี้ใหม่ได้');
+        redirect($self . '?ay=' . (int)$rep['academic_year_id']);
+    }
+
     if (!$rep || !can_review_advisor_report($user, $rep)) {
         abort_page(403, 'ไม่มีสิทธิ์ตรวจรายงานนี้');
     }
@@ -45,7 +63,7 @@ if (is_post()) {
             [$result, $comment, $uid, (int)$rep['id']]
         );
         log_activity('advisor_report_review', ($result === 'approved' ? 'ผ่าน' : 'ให้แก้ไข') . ': รายงานครูที่ปรึกษา '
-            . $rep['group_name'] . ' วันพุธที่ ' . thai_date($rep['meet_date']) . ' ของ ' . $rep['teacher_name']);
+            . $rep['group_name'] . ' วันที่ ' . thai_date($rep['meet_date']) . ' ของ ' . $rep['teacher_name']);
         flash('success', 'บันทึกผลการตรวจ "' . status_labels()[$result] . '" เรียบร้อยแล้ว');
 
         // ไปรายงานรอตรวจรายการถัดไป (ถ้ามี)
@@ -70,9 +88,9 @@ if ($viewId > 0) {
     }
     $canReview = can_review_advisor_report($user, $rep) && ($isAdmin || $rep['status'] === 'pending');
 
-    $pageTitle = 'ตรวจรายงานครูที่ปรึกษา';
+    $pageTitle = 'รายงานกิจกรรมโฮมรูม';
     $pageIcon = 'bi-clipboard-check';
-    $breadcrumbs = ['ตรวจรายงานครูที่ปรึกษา' => $self, $rep['teacher_name'] => null];
+    $breadcrumbs = ['รายงานกิจกรรมโฮมรูม' => $self, $rep['teacher_name'] => null];
     require APP_ROOT . '/includes/header.php';
     ?>
     <div class="row g-4">
@@ -121,6 +139,19 @@ if ($viewId > 0) {
                         <i class="bi bi-bar-chart-line me-1"></i>สรุปการส่งรายงานของครูท่านนี้</a>
                 </div>
             </div>
+            <?php if (can_delete_advisor_report($user, $rep)): ?>
+                <div class="card mb-4 border-danger">
+                    <div class="card-header text-danger"><i class="bi bi-trash me-2"></i>ลบรายงาน</div>
+                    <div class="card-body">
+                        <form method="post" data-confirm="ลบรายงานนี้ของ <?= e($rep['teacher_name']) ?> พร้อมภาพถ่าย? (ไม่สามารถกู้คืนได้)" data-confirm-icon="warning">
+                            <?= csrf_field() ?><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= (int)$rep['id'] ?>">
+                            <input class="form-control form-control-sm mb-2" name="delete_reason" maxlength="300" required placeholder="เหตุผล เช่น ส่งผิดกลุ่ม / ส่งซ้ำ">
+                            <button class="btn btn-sm btn-outline-danger w-100"><i class="bi bi-trash me-1"></i> ลบรายงาน</button>
+                        </form>
+                        <div class="form-text">ใช้เมื่อครูส่งผิด เช่น ผิดกลุ่มหรือผิดสัปดาห์ — ลบแล้วครูส่งรายงานของสัปดาห์นั้นใหม่ได้ (บันทึกเหตุผลไว้ใน Log)</div>
+                    </div>
+                </div>
+            <?php endif; ?>
             <a href="<?= e(url($self)) ?>" class="btn btn-outline-secondary w-100"><i class="bi bi-arrow-left me-1"></i> กลับรายการ</a>
         </div>
     </div>
@@ -145,9 +176,10 @@ $where = ['g.academic_year_id = ?'];
 $types = 'i';
 $params = [$ayId];
 if ($fDate !== '') {
-    $where[] = 'r.meet_date = ?';
-    $types .= 's';
-    $params[] = $fDate;
+    // สัปดาห์ที่เลือก (จันทร์–อาทิตย์ ของวันพุธนั้น) — รายงานลงวันที่ใดก็ได้ในสัปดาห์
+    $where[] = 'r.meet_date BETWEEN ? AND ?';
+    $types .= 'ss';
+    array_push($params, ...advisor_week_range($fDate));
 }
 if ($fDept > 0) {
     $where[] = 'g.department_id = ?';
@@ -185,15 +217,19 @@ $q = function (array $over) use ($ayId, $fStatus, $fDate, $fDept): string {
     return '?' . http_build_query(array_filter(array_merge($base, $over), fn($v) => $v !== null && $v !== ''));
 };
 
-$pageTitle = 'ตรวจรายงานครูที่ปรึกษา';
+$pageTitle = 'รายงานกิจกรรมโฮมรูม';
 $pageIcon = 'bi-clipboard-check';
-$breadcrumbs = ['ตรวจรายงานครูที่ปรึกษา' => null];
+$breadcrumbs = ['รายงานกิจกรรมโฮมรูม' => null];
 $pageActions = '<a href="' . e(url('reports/advisor_summary.php?ay=' . $ayId)) . '" class="btn btn-outline-primary"><i class="bi bi-bar-chart-line me-1"></i> สรุปภาพรวม</a>';
+// ผู้ตรวจที่เป็นครูที่ปรึกษาด้วย: ทางลัดไปหน้าส่งรายงานของตนเอง (รายงานของตนเองไม่แสดงในหน้าตรวจนี้)
+if (in_array($user['role'], teacher_roles(), true) && is_advisor_teacher($uid)) {
+    $pageActions = '<a href="' . e(url('teacher/advisor_reports.php')) . '" class="btn btn-accent"><i class="bi bi-send me-1"></i> ส่งรายงานของฉัน</a> ' . $pageActions;
+}
 require APP_ROOT . '/includes/header.php';
 ?>
 <?php if (!$isAdmin): ?>
     <div class="alert alert-light border small"><i class="bi bi-person-check me-1"></i>
-        ท่านเป็นผู้ตรวจรายงานครูที่ปรึกษาตามตำแหน่ง “<?= e($user['position']) ?>” — แสดงรายงานของครูทุกแผนก (ยกเว้นรายงานของท่านเอง)</div>
+        ท่านเป็นผู้ตรวจรายงานกิจกรรมโฮมรูมตามตำแหน่ง “<?= e($user['position']) ?>” — แสดงรายงานของครูทุกแผนก (ยกเว้นรายงานของท่านเอง — ส่ง/ดูรายงานของท่านที่เมนู “ครูที่ปรึกษา (รายงานของฉัน)”)</div>
 <?php endif; ?>
 
 <div class="d-flex flex-wrap gap-2 mb-3">
@@ -220,11 +256,11 @@ require APP_ROOT . '/includes/header.php';
                 </select>
             </div>
             <div class="col-md-3">
-                <label class="form-label small mb-1" for="date">สัปดาห์ (วันพุธ)</label>
+                <label class="form-label small mb-1" for="date">สัปดาห์</label>
                 <select name="date" id="date" class="form-select">
                     <option value="">ทุกสัปดาห์</option>
                     <?php foreach ($weekOptions as $d => $skip): ?>
-                        <option value="<?= e($d) ?>" <?= $fDate === $d ? 'selected' : '' ?>><?= e(advisor_date_label($d)) ?><?= $skip !== null ? ' (งดพบ)' : '' ?></option>
+                        <option value="<?= e($d) ?>" <?= $fDate === $d ? 'selected' : '' ?>><?= e(thai_date(advisor_week_range($d)[0])) ?> – <?= e(thai_date(advisor_week_range($d)[1])) ?><?= $skip !== null ? ' (งดพบ)' : '' ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
@@ -250,7 +286,7 @@ require APP_ROOT . '/includes/header.php';
         <div class="table-responsive">
             <table class="table table-hover datatable" data-order="[]">
                 <thead>
-                <tr><th>วันพุธ</th><th>ครูที่ปรึกษา</th><th>กลุ่มเรียน</th><th>แผนก</th><th class="text-center">เข้าพบ</th><th>สถานะ</th><th>ส่งเมื่อ</th><th class="no-sort"></th></tr>
+                <tr><th>วันที่พบ</th><th>ครูที่ปรึกษา</th><th>กลุ่มเรียน</th><th>แผนก</th><th class="text-center">เข้าพบ</th><th>สถานะ</th><th>ส่งเมื่อ</th><th class="no-sort"></th></tr>
                 </thead>
                 <tbody>
                 <?php foreach ($rows as $r): ?>

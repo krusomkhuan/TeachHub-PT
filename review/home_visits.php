@@ -23,6 +23,24 @@ $errors = [];
 if (is_post()) {
     csrf_verify();
     $hv = home_visit_fetch((int)post('id'));
+
+    // ---------- ลบรายงานของครู (ระบุเหตุผล บันทึกใน log) ----------
+    if (post('action') === 'delete') {
+        if (!$hv || !can_delete_advisor_report($user, $hv)) {
+            abort_page(403, 'ไม่มีสิทธิ์ลบรายงานนี้');
+        }
+        $reason = mb_substr(post('delete_reason'), 0, 300);
+        if ($reason === '') {
+            flash('error', 'กรุณาระบุเหตุผลที่ลบรายงาน');
+            redirect($self . '?id=' . (int)$hv['id']);
+        }
+        home_visit_delete($hv);
+        log_activity('home_visit_delete', 'ลบรายงานเยี่ยมบ้าน ' . $hv['student_name'] . ' (' . $hv['student_code'] . ') ของ '
+            . $hv['teacher_name'] . ' (ลบโดยผู้ตรวจ เหตุผล: ' . $reason . ')');
+        flash('success', 'ลบรายงานเยี่ยมบ้านของ ' . $hv['student_name'] . ' แล้ว — ครูสามารถบันทึกการเยี่ยมบ้านนักเรียนคนนี้ใหม่ได้');
+        redirect($self . '?year=' . (int)$hv['school_year']);
+    }
+
     if (!$hv || !can_review_home_visit($user, $hv)) {
         abort_page(403, 'ไม่มีสิทธิ์ตรวจรายงานนี้');
     }
@@ -118,6 +136,19 @@ if ($viewId > 0) {
                         <i class="bi bi-bar-chart-line me-1"></i>สรุปการเยี่ยมบ้านของครูท่านนี้</a>
                 </div>
             </div>
+            <?php if (can_delete_advisor_report($user, $hv)): ?>
+                <div class="card mb-4 border-danger">
+                    <div class="card-header text-danger"><i class="bi bi-trash me-2"></i>ลบรายงาน</div>
+                    <div class="card-body">
+                        <form method="post" data-confirm="ลบรายงานเยี่ยมบ้านของ <?= e($hv['student_name']) ?> พร้อมภาพถ่าย? (ไม่สามารถกู้คืนได้)" data-confirm-icon="warning">
+                            <?= csrf_field() ?><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= (int)$hv['id'] ?>">
+                            <input class="form-control form-control-sm mb-2" name="delete_reason" maxlength="300" required placeholder="เหตุผล เช่น รหัสนักเรียนผิด / บันทึกซ้ำ">
+                            <button class="btn btn-sm btn-outline-danger w-100"><i class="bi bi-trash me-1"></i> ลบรายงาน</button>
+                        </form>
+                        <div class="form-text">ใช้เมื่อครูบันทึกผิด — ลบแล้วครูบันทึกการเยี่ยมบ้านนักเรียนคนนี้ใหม่ได้ (บันทึกเหตุผลไว้ใน Log)</div>
+                    </div>
+                </div>
+            <?php endif; ?>
             <a href="<?= e(url($self . '?year=' . (int)$hv['school_year'])) ?>" class="btn btn-outline-secondary w-100"><i class="bi bi-arrow-left me-1"></i> กลับรายการ</a>
         </div>
     </div>
@@ -182,11 +213,15 @@ $pageTitle = 'ตรวจรายงานการเยี่ยมบ้า
 $pageIcon = 'bi-house-check';
 $breadcrumbs = ['ตรวจรายงานการเยี่ยมบ้าน' => null];
 $pageActions = '<a href="' . e(url('reports/home_visit_summary.php?year=' . $year)) . '" class="btn btn-outline-primary"><i class="bi bi-bar-chart-line me-1"></i> สรุปภาพรวม</a>';
+// ผู้ตรวจที่เป็นครูที่ปรึกษาด้วย: ทางลัดไปหน้าบันทึกการเยี่ยมบ้านของตนเอง
+if (in_array($user['role'], teacher_roles(), true) && is_advisor_teacher($uid)) {
+    $pageActions = '<a href="' . e(url('teacher/home_visits.php')) . '" class="btn btn-accent"><i class="bi bi-house-add me-1"></i> บันทึกการเยี่ยมบ้านของฉัน</a> ' . $pageActions;
+}
 require APP_ROOT . '/includes/header.php';
 ?>
 <?php if (!$isAdmin): ?>
     <div class="alert alert-light border small"><i class="bi bi-person-check me-1"></i>
-        ท่านเป็นผู้ตรวจรายงานการเยี่ยมบ้านตามตำแหน่ง “<?= e($user['position']) ?>” — แสดงรายงานของครูทุกแผนก (ยกเว้นรายงานของท่านเอง)</div>
+        ท่านเป็นผู้ตรวจรายงานการเยี่ยมบ้านตามตำแหน่ง “<?= e($user['position']) ?>” — แสดงรายงานของครูทุกแผนก (ยกเว้นรายงานของท่านเอง — บันทึก/ดูรายงานของท่านที่เมนู “ครูที่ปรึกษา (รายงานของฉัน)”)</div>
 <?php endif; ?>
 
 <div class="d-flex flex-wrap gap-2 mb-3">

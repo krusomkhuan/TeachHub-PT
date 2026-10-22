@@ -6,6 +6,10 @@
 require_once __DIR__ . '/../config/config.php';
 
 $user = require_role('teacher');
+// เจ้าหน้าที่งานครูที่ปรึกษาและแนะแนว: หน้าแรกคือหน้าตรวจรายงานกิจกรรมโฮมรูม
+if (is_advisor_staff_only($user)) {
+    redirect('review/advisor_reports.php');
+}
 $uid = (int)$user['id'];
 
 // ---------- สรุปงานของฉัน (ทุกภาคเรียน) ----------

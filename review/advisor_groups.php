@@ -30,13 +30,19 @@ if (is_post()) {
         if ($id && !$old) {
             abort_page(404, 'ไม่พบกลุ่มที่ปรึกษา');
         }
-        $teacherId = (int)post('teacher_id');
+        // เพิ่มใหม่: เลือกครูที่ปรึกษาได้หลายคน (1 กลุ่มเรียนมีครูที่ปรึกษาหลายคน — สร้าง 1 แถวต่อครู แต่ละคนส่งรายงานของตนเอง)
+        // แก้ไข: แก้ทีละแถว (ครู 1 คน)
+        $teacherIds = $old ? [(int)post('teacher_id')]
+            : array_values(array_unique(array_filter(array_map('intval', (array)($_POST['teacher_ids'] ?? [])))));
+        $teacherId = $teacherIds[0] ?? 0;
         $deptId = (int)post('department_id');
         $name = mb_substr(preg_replace('/\s+/u', ' ', post('group_name')), 0, 100);
         $count = post('student_count');
-        $teacher = db_one("SELECT id FROM users WHERE id = ? AND status = 'active' AND role IN ('teacher','supervisor')", 'i', [$teacherId]);
-        if (!$teacher) {
-            $errors['teacher_id'] = 'กรุณาเลือกครูที่ปรึกษา';
+        $validTeachers = $teacherIds ? array_map('intval', array_column(db_all(
+            "SELECT id FROM users WHERE status = 'active' AND role IN ('teacher','supervisor') AND id IN (" . implode(',', $teacherIds) . ')'
+        ), 'id')) : [];
+        if (!$teacherIds || count($validTeachers) !== count($teacherIds)) {
+            $errors['teacher_id'] = 'กรุณาเลือกครูที่ปรึกษาอย่างน้อย 1 คน';
         }
         if ($name === '') {
             $errors['group_name'] = 'กรุณาระบุชื่อกลุ่มเรียน';
@@ -51,14 +57,23 @@ if (is_post()) {
             $errors['teacher_id'] = 'กลุ่มนี้มีรายงานแล้ว เปลี่ยนครูที่ปรึกษาไม่ได้ (ให้เพิ่มกลุ่มใหม่สำหรับครูอีกท่าน)';
         }
         $ayForGroup = $old ? (int)$old['academic_year_id'] : $ayId;
-        if (!$errors && db_value(
-            'SELECT 1 FROM advisor_groups WHERE academic_year_id = ? AND teacher_id = ? AND group_name = ? AND id <> ?',
-            'iisi',
-            [$ayForGroup, $teacherId, $name, $id]
-        )) {
-            $errors['group_name'] = 'ครูท่านนี้มีกลุ่มชื่อนี้ในภาคเรียนนี้แล้ว';
+        // ครูที่มีกลุ่มชื่อนี้ในภาคเรียนนี้อยู่แล้ว
+        $dupNames = [];
+        if (!$errors) {
+            foreach ($teacherIds as $tid) {
+                if (db_value('SELECT 1 FROM advisor_groups WHERE academic_year_id = ? AND teacher_id = ? AND group_name = ? AND id <> ?',
+                    'iisi', [$ayForGroup, $tid, $name, $id])) {
+                    $dupNames[] = full_name(db_one('SELECT prefix, first_name, last_name FROM users WHERE id = ?', 'i', [$tid]));
+                }
+            }
+            if ($old && $dupNames) {
+                $errors['group_name'] = 'ครูท่านนี้มีกลุ่มชื่อนี้ในภาคเรียนนี้แล้ว';
+            } elseif (!$old && count($dupNames) === count($teacherIds)) {
+                $errors['group_name'] = 'ครูที่เลือกทุกคนมีกลุ่มชื่อนี้ในภาคเรียนนี้แล้ว';
+            }
         }
         if (!$errors) {
+            $added = 0;
             if ($old) {
                 db_exec(
                     'UPDATE advisor_groups SET teacher_id = ?, department_id = ?, group_name = ?, student_count = ? WHERE id = ?',
@@ -66,14 +81,19 @@ if (is_post()) {
                     [$teacherId, $deptId ?: null, $name, (int)$count, $id]
                 );
             } else {
-                db_insert(
-                    'INSERT INTO advisor_groups (academic_year_id, teacher_id, department_id, group_name, student_count, created_by) VALUES (?, ?, ?, ?, ?, ?)',
-                    'iiisii',
-                    [$ayId, $teacherId, $deptId ?: null, $name, (int)$count, (int)$user['id']]
-                );
+                foreach ($teacherIds as $tid) {
+                    // INSERT IGNORE: ข้ามครูที่มีกลุ่มชื่อนี้แล้ว (uq_advisor_group)
+                    $added += db_exec(
+                        'INSERT IGNORE INTO advisor_groups (academic_year_id, teacher_id, department_id, group_name, student_count, created_by) VALUES (?, ?, ?, ?, ?, ?)',
+                        'iiisii',
+                        [$ayId, $tid, $deptId ?: null, $name, (int)$count, (int)$user['id']]
+                    ) > 0 ? 1 : 0;
+                }
             }
-            log_activity('advisor_group_save', ($old ? 'แก้ไข' : 'เพิ่ม') . 'กลุ่มที่ปรึกษา ' . $name . ' ภาคเรียน ' . academic_label($ay));
-            flash('success', 'บันทึกกลุ่มที่ปรึกษา ' . $name . ' แล้ว');
+            log_activity('advisor_group_save', ($old ? 'แก้ไข' : 'เพิ่ม') . 'กลุ่มที่ปรึกษา ' . $name . ' ภาคเรียน ' . academic_label($ay)
+                . ($old ? '' : ' (ครูที่ปรึกษา ' . $added . ' คน)'));
+            flash('success', 'บันทึกกลุ่มที่ปรึกษา ' . $name . ' แล้ว' . ($old ? '' : ' (ครูที่ปรึกษา ' . $added . ' คน)')
+                . ($dupNames ? ' · ข้าม ' . implode(', ', $dupNames) . ' เพราะมีกลุ่มนี้อยู่แล้ว' : ''));
             redirect($self . '?ay=' . $ayForGroup);
         }
         if ($old) {
@@ -151,7 +171,7 @@ if (is_post()) {
             flash('error', 'จำนวนวันต้องเป็น 0-6');
         } else {
             setting_save('advisor_late_days', $days);
-            log_activity('settings_update', 'กำหนดส่งรายงานครูที่ปรึกษา ภายใน ' . $days . ' วันหลังวันพุธ');
+            log_activity('settings_update', 'กำหนดส่งรายงานครูที่ปรึกษา ภายใน ' . $days . ' วันหลังวันที่พบนักเรียน');
             flash('success', 'บันทึกกำหนดส่งแล้ว');
         }
         redirect($back);
@@ -172,6 +192,11 @@ $groups = db_all(
     'i',
     [$ayId]
 );
+// จำนวนครูที่ปรึกษาต่อชื่อกลุ่มเรียน (กลุ่มที่มีครูหลายคนจะแสดงป้าย "ร่วม N คน")
+$advisorsPerGroup = [];
+foreach ($groups as $g) {
+    $advisorsPerGroup[$g['group_name']][] = full_name($g);
+}
 $teachers = db_all(
     "SELECT u.id, u.prefix, u.first_name, u.last_name, u.department_id, d.name AS department_name
      FROM users u LEFT JOIN departments d ON d.id = u.department_id
@@ -226,7 +251,10 @@ require APP_ROOT . '/includes/header.php';
                         <tbody>
                         <?php foreach ($groups as $g): ?>
                             <tr class="<?= $editId === (int)$g['id'] ? 'table-warning' : '' ?>">
-                                <td class="fw-semibold"><?= e($g['group_name']) ?></td>
+                                <td class="fw-semibold"><?= e($g['group_name']) ?>
+                                    <?php $all = $advisorsPerGroup[$g['group_name']] ?? []; if (count($all) > 1): ?>
+                                        <span class="badge bg-info text-dark fw-normal" title="ครูที่ปรึกษา: <?= e(implode(', ', $all)) ?>">ร่วม <?= count($all) ?> คน</span>
+                                    <?php endif; ?></td>
                                 <td><?= e(full_name($g)) ?><?= $g['user_status'] !== 'active' ? ' <span class="badge bg-secondary">ไม่ใช้งาน</span>' : '' ?></td>
                                 <td class="small"><?= e(preg_replace('/^แผนกวิชา/u', '', (string)($g['department_name'] ?? '-'))) ?></td>
                                 <td class="text-center"><?= (int)$g['student_count'] ?></td>
@@ -273,6 +301,7 @@ require APP_ROOT . '/includes/header.php';
                     <input type="hidden" name="action" value="save_group">
                     <input type="hidden" name="id" value="<?= (int)($editing['id'] ?? 0) ?>">
                     <input type="hidden" name="ay" value="<?= $ayId ?>">
+                    <?php if ($editing): ?>
                     <div class="mb-3">
                         <label class="form-label" for="teacher_id">ครูที่ปรึกษา *</label>
                         <select class="form-select<?= $invalid('teacher_id') ?>" name="teacher_id" id="teacher_id">
@@ -282,7 +311,27 @@ require APP_ROOT . '/includes/header.php';
                                     <?= e(full_name($t)) ?> (<?= e(preg_replace('/^แผนกวิชา/u', '', (string)($t['department_name'] ?? '-'))) ?>)</option>
                             <?php endforeach; ?>
                         </select><?= $err('teacher_id') ?>
+                        <?php $co = advisor_co_advisors((int)$editing['academic_year_id'], (string)$editing['group_name'], (int)$editing['teacher_id']); ?>
+                        <?php if ($co): ?><div class="form-text">ครูที่ปรึกษาร่วมในกลุ่มนี้: <?= e(implode(', ', $co)) ?></div><?php endif; ?>
                     </div>
+                    <?php else: ?>
+                    <?php $checked = array_map('intval', (array)($_POST['teacher_ids'] ?? [])); ?>
+                    <div class="mb-3">
+                        <label class="form-label" for="teacherFilter">ครูที่ปรึกษา * <span class="text-muted small fw-normal">(เลือกได้หลายคน)</span></label>
+                        <input type="search" class="form-control form-control-sm mb-1" id="teacherFilter" placeholder="ค้นหาชื่อครู/แผนก" aria-label="ค้นหาครู">
+                        <div class="border rounded px-2 py-1<?= isset($errors['teacher_id']) ? ' border-danger' : '' ?>" style="max-height:220px;overflow-y:auto" id="teacherList">
+                            <?php foreach ($teachers as $t): $tDept = preg_replace('/^แผนกวิชา/u', '', (string)($t['department_name'] ?? '-')); ?>
+                                <div class="form-check teacher-item" data-search="<?= e(mb_strtolower(full_name($t) . ' ' . $tDept)) ?>">
+                                    <input class="form-check-input" type="checkbox" name="teacher_ids[]" value="<?= (int)$t['id'] ?>" id="t<?= (int)$t['id'] ?>"
+                                           data-dept="<?= (int)$t['department_id'] ?>" <?= in_array((int)$t['id'], $checked, true) ? 'checked' : '' ?>>
+                                    <label class="form-check-label small" for="t<?= (int)$t['id'] ?>"><?= e(full_name($t)) ?> <span class="text-muted">(<?= e($tDept) ?>)</span></label>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                        <div class="form-text" id="teacherCount">เลือกแล้ว 0 คน · ครูแต่ละคนส่งรายงานกิจกรรมโฮมรูมของตนเอง</div>
+                        <?= $err('teacher_id') ?>
+                    </div>
+                    <?php endif; ?>
                     <div class="mb-3">
                         <label class="form-label" for="group_name">กลุ่มเรียน *</label>
                         <input class="form-control<?= $invalid('group_name') ?>" name="group_name" id="group_name" maxlength="100"
@@ -311,7 +360,7 @@ require APP_ROOT . '/includes/header.php';
         </div>
 
         <div class="card mb-4">
-            <div class="card-header"><i class="bi bi-calendar-x me-2"></i>วันพุธที่งดพบ (ไม่นับเป็นขาดส่ง)</div>
+            <div class="card-header"><i class="bi bi-calendar-x me-2"></i>สัปดาห์งดพบ (เลือกวันพุธของสัปดาห์ ไม่นับเป็นขาดส่ง)</div>
             <div class="card-body">
                 <?php if ($skips): ?>
                     <ul class="list-group list-group-flush mb-3">
@@ -355,22 +404,36 @@ require APP_ROOT . '/includes/header.php';
                 <form method="post" class="row g-2 align-items-end">
                     <?= csrf_field() ?><input type="hidden" name="action" value="save_setting"><input type="hidden" name="ay" value="<?= $ayId ?>">
                     <div class="col-7">
-                        <label class="form-label small" for="advisor_late_days">ส่งได้ภายในกี่วันหลังวันพุธ</label>
+                        <label class="form-label small" for="advisor_late_days">ส่งได้ภายในกี่วันหลังวันที่พบนักเรียน</label>
                         <input type="number" class="form-control form-control-sm" name="advisor_late_days" id="advisor_late_days" min="0" max="6" value="<?= advisor_late_days() ?>">
                     </div>
                     <div class="col-5"><button class="btn btn-sm btn-primary w-100">บันทึก</button></div>
-                    <div class="col-12 form-text">0 = ต้องส่งภายในวันพุธ, 2 = ภายในวันศุกร์ เลยกำหนดยังส่งได้แต่ติดป้าย “ส่งช้า”</div>
+                    <div class="col-12 form-text">0 = ต้องส่งภายในวันที่พบนักเรียน, 2 = ภายใน 2 วันหลังวันที่พบ เลยกำหนดยังส่งได้แต่ติดป้าย “ส่งช้า”</div>
                 </form>
             </div>
         </div>
     </div>
 </div>
 <?php
-// เลือกครูแล้วตั้งแผนกตามแผนกของครูให้อัตโนมัติ (เฉพาะตอนเพิ่มใหม่)
+// เพิ่มใหม่: ค้นหาครูในรายการ, นับจำนวนที่เลือก, ตั้งแผนกตามครูคนแรกที่เลือกให้อัตโนมัติ (ถ้ายังไม่ได้เลือกแผนก)
 if (!$editing) {
     $pageScripts = '(function () {
-        var t = document.getElementById("teacher_id"), d = document.getElementById("department_id");
-        t.addEventListener("change", function () { var o = t.options[t.selectedIndex]; if (o && o.dataset.dept && o.dataset.dept !== "0") d.value = o.dataset.dept; });
+        var d = document.getElementById("department_id"), list = document.getElementById("teacherList");
+        var filter = document.getElementById("teacherFilter"), count = document.getElementById("teacherCount");
+        function update() {
+            var n = list.querySelectorAll("input:checked").length;
+            count.textContent = "เลือกแล้ว " + n + " คน · ครูแต่ละคนส่งรายงานกิจกรรมโฮมรูมของตนเอง";
+        }
+        list.addEventListener("change", function (ev) {
+            var cb = ev.target;
+            if (cb.checked && d.value === "0" && cb.dataset.dept && cb.dataset.dept !== "0") d.value = cb.dataset.dept;
+            update();
+        });
+        filter.addEventListener("input", function () {
+            var q = filter.value.trim().toLowerCase();
+            list.querySelectorAll(".teacher-item").forEach(function (el) { el.classList.toggle("d-none", q !== "" && el.dataset.search.indexOf(q) === -1); });
+        });
+        update();
     })();';
 }
 require APP_ROOT . '/includes/footer.php';

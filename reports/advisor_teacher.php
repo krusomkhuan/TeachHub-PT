@@ -57,9 +57,13 @@ $years = db_all('SELECT * FROM academic_years ORDER BY year DESC, semester DESC'
 $ay = advisor_academic_year(get_int('ay'));
 $ayId = (int)($ay['id'] ?? 0);
 $groups = $ay ? advisor_teacher_groups($teacherId, $ayId) : [];
-$sum = advisor_summary($ay, 0, $teacherId);
+$period = advisor_period($ay); // ทั้งภาคเรียน / รายเดือน / รายสัปดาห์
+$sum = advisor_summary($ay, 0, $teacherId, $period['range']);
 $t = $sum['teachers'][$teacherId] ?? null;
 $weds = advisor_wednesdays($ay); // ถึงวันนี้ รวมวันงดพบ
+if ($period['range']) {
+    $weds = array_filter($weds, fn($w) => $w >= $period['range'][0] && $w <= $period['range'][1], ARRAY_FILTER_USE_KEY);
+}
 
 $reports = [];
 foreach (db_all(
@@ -68,7 +72,7 @@ foreach (db_all(
     'ii',
     [$teacherId, $ayId]
 ) as $r) {
-    $reports[(int)$r['group_id']][$r['meet_date']] = $r;
+    $reports[(int)$r['group_id']][advisor_week_wed($r['meet_date'])] = $r; // จับคู่ตามสัปดาห์ (ลงวันที่ใดก็ได้ในสัปดาห์)
 }
 $missing = [];
 foreach ($groups as $g) {
@@ -84,7 +88,7 @@ $pageTitle = 'สรุปรายงานครูที่ปรึกษา
 $pageIcon = 'bi-person-badge';
 $breadcrumbs = $isOwn && !can_view_advisor_overview($user)
     ? ['รายงานครูที่ปรึกษา' => 'teacher/advisor_reports.php?ay=' . $ayId, 'สรุปของฉัน' => null]
-    : ['สรุปรายงานครูที่ปรึกษา' => 'reports/advisor_summary.php?ay=' . $ayId, full_name($teacher) => null];
+    : ['สรุปรายงานกิจกรรมโฮมรูม' => 'reports/advisor_summary.php?' . http_build_query(array_filter(['ay' => $ayId] + advisor_period_query($period))), full_name($teacher) => null];
 $activeMenu = $isOwn && !can_view_advisor_overview($user) ? 'teacher/advisor_reports.php' : 'reports/advisor_summary.php';
 $pageActions = '<button type="button" class="btn btn-outline-secondary" onclick="window.print()"><i class="bi bi-printer me-1"></i> พิมพ์</button>';
 require APP_ROOT . '/includes/header.php';
@@ -95,13 +99,15 @@ require APP_ROOT . '/includes/header.php';
             <input type="hidden" name="teacher" value="<?= $teacherId ?>">
             <div class="col-md-3">
                 <label class="form-label small mb-1" for="ay">ภาคเรียน</label>
-                <select name="ay" id="ay" class="form-select" onchange="this.form.submit()">
+                <select name="ay" id="ay" class="form-select">
                     <?php foreach ($years as $y): ?>
                         <option value="<?= (int)$y['id'] ?>" <?= $ayId === (int)$y['id'] ? 'selected' : '' ?>><?= e(academic_label($y)) ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="col-md-9 small">
+            <?= advisor_period_controls($period) ?>
+            <div class="col-md-1"><button class="btn btn-primary w-100" title="แสดง"><i class="bi bi-funnel"></i></button></div>
+            <div class="col-12 small">
                 <span class="fw-semibold"><?= e(full_name($teacher)) ?></span> · <?= e($teacher['department_name'] ?? '-') ?>
                 <?php if (!$isOwn): ?> · <i class="bi bi-envelope"></i> <?= e($teacher['email']) ?> · <i class="bi bi-telephone"></i> <?= e($teacher['phone'] ?: '-') ?><?php endif; ?>
             </div>
@@ -134,20 +140,20 @@ require APP_ROOT . '/includes/header.php';
     <div class="row g-4">
         <div class="col-xl-8">
             <div class="card mb-4">
-                <div class="card-header"><i class="bi bi-calendar-week me-2"></i>การส่งรายงานรายสัปดาห์ ภาคเรียน <?= e(academic_label($ay)) ?></div>
+                <div class="card-header"><i class="bi bi-calendar-week me-2"></i>การส่งรายงานรายสัปดาห์ · <?= e($period['label']) ?><?= $period['range'] ? ' (ภาคเรียน ' . e(academic_label($ay)) . ')' : '' ?></div>
                 <div class="card-body">
                     <div class="table-responsive">
                         <table class="table table-sm table-hover align-middle mb-0">
-                            <thead><tr><th>สัปดาห์</th><th>วันพุธ</th>
+                            <thead><tr><th>#</th><th>สัปดาห์</th>
                                 <?php foreach ($groups as $g): ?><th><?= e($g['group_name']) ?></th><?php endforeach; ?></tr></thead>
                             <tbody>
                             <?php if (!$weds): ?>
-                                <tr><td colspan="<?= count($groups) + 2 ?>" class="text-center text-muted py-3">ยังไม่ถึงวันพุธแรกของภาคเรียน</td></tr>
+                                <tr><td colspan="<?= count($groups) + 2 ?>" class="text-center text-muted py-3"><?= $period['range'] ? 'ไม่มีสัปดาห์ที่ต้องส่งในช่วงเวลานี้' : 'ยังไม่ถึงวันพุธแรกของภาคเรียน' ?></td></tr>
                             <?php endif; ?>
                             <?php $i = 0; foreach ($weds as $d => $skip): $i++; ?>
                                 <tr>
                                     <td class="text-muted small"><?= $i ?></td>
-                                    <td class="text-nowrap"><?= e(advisor_date_label($d)) ?></td>
+                                    <td class="text-nowrap"><?= e(thai_date(advisor_week_range($d)[0])) ?> – <?= e(thai_date(advisor_week_range($d)[1])) ?></td>
                                     <?php if ($skip !== null): ?>
                                         <td colspan="<?= count($groups) ?>"><span class="badge bg-secondary">งดพบ</span> <span class="small text-muted"><?= e($skip) ?></span></td>
                                     <?php else: ?>
@@ -155,7 +161,7 @@ require APP_ROOT . '/includes/header.php';
                                             <td>
                                                 <?php if ($r): ?>
                                                     <a href="<?= e(url($reportLink((int)$r['id'], $teacherId))) ?>" class="text-decoration-none"><?= status_badge($r['status'], (bool)$r['is_late']) ?></a>
-                                                    <span class="small text-muted ms-1"><?= (int)$r['present_count'] + (int)$r['late_count'] ?>/<?= (int)$r['total_students'] ?></span>
+                                                    <span class="small text-muted ms-1"><?= (int)$r['present_count'] + (int)$r['late_count'] ?>/<?= (int)$r['total_students'] ?> · <?= e(advisor_date_label($r['meet_date'])) ?></span>
                                                 <?php else: ?>
                                                     <span class="badge bg-danger bg-opacity-75"><i class="bi bi-x-circle me-1"></i>ขาดส่ง</span>
                                                 <?php endif; ?>
@@ -181,7 +187,7 @@ require APP_ROOT . '/includes/header.php';
                 </ul>
             </div>
             <div class="card mb-4">
-                <div class="card-header"><i class="bi bi-exclamation-triangle me-2 text-danger"></i>สัปดาห์ที่ขาดส่ง (<?= count($missing) ?>)</div>
+                <div class="card-header"><i class="bi bi-exclamation-triangle me-2 text-danger"></i>สัปดาห์ที่ขาดส่ง · <?= e($period['label']) ?> (<?= count($missing) ?>)</div>
                 <div class="card-body small">
                     <?php if (!$missing): ?>
                         <span class="text-success"><i class="bi bi-check-circle me-1"></i>ส่งครบทุกสัปดาห์</span>

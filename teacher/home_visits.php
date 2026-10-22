@@ -1,7 +1,7 @@
 <?php
 /**
  * ไฟล์: teacher/home_visits.php
- * รายงานการเยี่ยมบ้านนักเรียนของครูที่ปรึกษา — นักเรียน 1 คน เยี่ยม 1 ครั้งต่อปีการศึกษา
+ * รายงานการเยี่ยมบ้านนักเรียนของครูที่ปรึกษา — นักเรียน 1 คน เยี่ยมได้หลายครั้งต่อปีการศึกษา (ไม่ซ้ำวันเดียวกัน)
  *   (ไม่มี)  รายการเยี่ยมบ้านของปีการศึกษา   ?year= ปีการศึกษา (พ.ศ.)
  *   ?new=1   บันทึกการเยี่ยมบ้าน   ?id=xx ดูรายงาน   ?edit=xx แก้ไข (เฉพาะ "รอตรวจ" หรือ "ให้แก้ไข")
  * ครูต้องมีกลุ่มที่ปรึกษาในปีการศึกษานั้น (กำหนดโดยงานครูที่ปรึกษาและแนะแนว)
@@ -119,15 +119,16 @@ if (is_post()) {
         $year = $hv ? (int)$hv['school_year'] : home_visit_year((int)post('year'));
         $groups = home_visit_teacher_groups($uid, $year);
         $d = home_visit_validate($errors, $groups, $year);
-        if (!isset($errors['student_code'])) {
+        // เยี่ยมบ้านนักเรียนคนเดิมได้หลายครั้งต่อปี — ห้ามซ้ำเฉพาะนักเรียนคนเดิมในวันเดียวกัน
+        if (!isset($errors['student_code']) && !isset($errors['visit_date'])) {
             $dup = db_one(
                 "SELECT v.id, CONCAT(u.prefix, u.first_name, ' ', u.last_name) AS teacher_name FROM home_visits v JOIN users u ON u.id = v.teacher_id
-                 WHERE v.school_year = ? AND v.student_code = ? AND v.id <> ?",
-                'isi',
-                [$year, $d['student_code'], $id]
+                 WHERE v.school_year = ? AND v.student_code = ? AND v.visit_date = ? AND v.id <> ?",
+                'issi',
+                [$year, $d['student_code'], $d['visit_date'], $id]
             );
             if ($dup) {
-                $errors['student_code'] = 'นักเรียนรหัสนี้มีรายงานเยี่ยมบ้านในปีการศึกษา ' . $year . ' แล้ว (โดย ' . $dup['teacher_name'] . ')';
+                $errors['visit_date'] = 'นักเรียนรหัสนี้มีรายงานเยี่ยมบ้านวันที่ ' . thai_date($d['visit_date']) . ' แล้ว (โดย ' . $dup['teacher_name'] . ')';
             }
         }
 
@@ -525,7 +526,7 @@ $pageActions = $groups ? '<a href="' . e(url($self . '?new=1&year=' . $year)) . 
 require APP_ROOT . '/includes/header.php';
 ?>
 <div class="alert alert-light border small"><i class="bi bi-info-circle me-1 text-accent"></i>
-    ครูที่ปรึกษาบันทึกการเยี่ยมบ้านนักเรียนในที่ปรึกษา <strong>นักเรียน 1 คน บันทึกได้ 1 ครั้งต่อปีการศึกษา</strong> พร้อมภาพถ่ายอย่างน้อย 1 ภาพ</div>
+    ครูที่ปรึกษาบันทึกการเยี่ยมบ้านนักเรียนในที่ปรึกษา <strong>นักเรียน 1 คน เยี่ยมได้หลายครั้งต่อปีการศึกษา</strong> (บันทึก 1 รายงานต่อการเยี่ยม 1 ครั้ง) พร้อมภาพถ่ายอย่างน้อย 1 ภาพ</div>
 
 <div class="card mb-4">
     <div class="card-body">
@@ -548,7 +549,7 @@ require APP_ROOT . '/includes/header.php';
         ท่านยังไม่ได้รับมอบหมายเป็นครูที่ปรึกษาในปีการศึกษา <?= $year ?> — กลุ่มที่ปรึกษากำหนดโดยงานครูที่ปรึกษาและแนะแนว</div>
 <?php else: ?>
     <div class="row g-3 mb-4">
-        <?php foreach ([[(int)$mine['visits'] . '/' . (int)$mine['students'], 'เยี่ยมบ้านแล้ว (คน)', 'ic-blue', 'bi-house-check'],
+        <?php foreach ([[(int)$mine['visits'] . '/' . (int)$mine['students'], 'เยี่ยมบ้านแล้ว (คน) · รวม ' . (int)$mine['visit_times'] . ' ครั้ง', 'ic-blue', 'bi-house-check'],
                         [$mine['visit_pct'] . '%', 'ร้อยละของนักเรียนในที่ปรึกษา', 'ic-navy', 'bi-percent'],
                         [(int)$mine['risk'], 'กลุ่มเสี่ยง', 'ic-yellow', 'bi-exclamation-triangle'],
                         [(int)$mine['problem'], 'กลุ่มมีปัญหา', 'ic-red', 'bi-exclamation-octagon'],

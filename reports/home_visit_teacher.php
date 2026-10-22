@@ -54,14 +54,19 @@ if (!$teacher) {
 }
 $years = home_visit_years();
 $year = home_visit_year(get_int('year'));
-$sum = home_visit_summary($year, 0, $teacherId);
+$period = home_visit_period($year); // ทั้งปีการศึกษา หรือภาคเรียน
+$semRow = $period['sem'];
+$sum = home_visit_summary($year, 0, $teacherId, $semRow);
 $t = $sum['teachers'][$teacherId] ?? null;
 $rows = db_all(
     'SELECT v.id, v.student_code, v.student_name, v.visit_date, v.risk_level, v.status, g.group_name
      FROM home_visits v JOIN advisor_groups g ON g.id = v.group_id
-     WHERE v.teacher_id = ? AND v.school_year = ? ORDER BY g.group_name, v.student_code',
-    'ii',
-    [$teacherId, $year]
+     WHERE v.teacher_id = ? AND v.school_year = ?
+       AND (? = 0 OR (? <> \'\' AND v.visit_date BETWEEN ? AND ?) OR (? = \'\' AND g.academic_year_id = ?))
+     ORDER BY g.group_name, v.student_code, v.visit_date',
+    'iiissssi',
+    [$teacherId, $year, (int)($semRow['id'] ?? 0), (string)($semRow['start_date'] ?? ''), (string)($semRow['start_date'] ?? ''),
+        (string)($semRow['end_date'] ?? ''), (string)($semRow['start_date'] ?? ''), (int)($semRow['id'] ?? 0)]
 );
 
 $isOwn = $teacherId === $uid;
@@ -70,7 +75,7 @@ $pageTitle = 'สรุปการเยี่ยมบ้าน: ' . full_name
 $pageIcon = 'bi-person-badge';
 $breadcrumbs = $ownOnly
     ? ['รายงานการเยี่ยมบ้าน' => 'teacher/home_visits.php?year=' . $year, 'สรุปของฉัน' => null]
-    : ['สรุปการเยี่ยมบ้าน' => 'reports/home_visit_summary.php?year=' . $year, full_name($teacher) => null];
+    : ['สรุปรายงานการเยี่ยมบ้าน' => 'reports/home_visit_summary.php?' . http_build_query(array_filter(['year' => $year, 'sem' => $semRow['id'] ?? null])), full_name($teacher) => null];
 $activeMenu = $ownOnly ? 'teacher/home_visits.php' : 'reports/home_visit_summary.php';
 $pageActions = '<button type="button" class="btn btn-outline-secondary" onclick="window.print()"><i class="bi bi-printer me-1"></i> พิมพ์</button>';
 require APP_ROOT . '/includes/header.php';
@@ -81,13 +86,15 @@ require APP_ROOT . '/includes/header.php';
             <input type="hidden" name="teacher" value="<?= $teacherId ?>">
             <div class="col-md-2">
                 <label class="form-label small mb-1" for="year">ปีการศึกษา</label>
-                <select name="year" id="year" class="form-select" onchange="this.form.submit()">
+                <select name="year" id="year" class="form-select" onchange="this.form.sem.value='';this.form.submit()">
                     <?php foreach ($years as $y): ?>
                         <option value="<?= $y ?>" <?= $year === $y ? 'selected' : '' ?>><?= $y ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="col-md-10 small">
+            <?= home_visit_period_controls($period) ?>
+            <div class="col-md-1"><button class="btn btn-primary w-100" title="แสดง"><i class="bi bi-funnel"></i></button></div>
+            <div class="col-md-6 small">
                 <span class="fw-semibold"><?= e(full_name($teacher)) ?></span> · <?= e($teacher['department_name'] ?? '-') ?>
                 <?php if ($t): ?> · กลุ่มที่ปรึกษา: <?= e(implode(', ', $t['group_names'])) ?><?php endif; ?>
             </div>
@@ -99,7 +106,7 @@ require APP_ROOT . '/includes/header.php';
     <div class="alert alert-info">ครูท่านนี้ไม่ได้เป็นครูที่ปรึกษาในปีการศึกษา <?= $year ?></div>
 <?php else: ?>
     <div class="row g-3 mb-4">
-        <?php foreach ([[$t['visits'] . '/' . $t['students'], 'เยี่ยมบ้านแล้ว (คน)', 'ic-blue', 'bi-house-check'],
+        <?php foreach ([[$t['visits'] . '/' . $t['students'], 'เยี่ยมบ้านแล้ว (คน) · รวม ' . $t['visit_times'] . ' ครั้ง', 'ic-blue', 'bi-house-check'],
                         [$t['visit_pct'] . '%', 'ร้อยละ', 'ic-navy', 'bi-percent'],
                         [$t['normal'], 'ปกติ', 'ic-green', 'bi-emoji-smile'],
                         [$t['risk'], 'กลุ่มเสี่ยง', 'ic-yellow', 'bi-exclamation-triangle'],
@@ -115,7 +122,7 @@ require APP_ROOT . '/includes/header.php';
     </div>
 
     <div class="card">
-        <div class="card-header"><i class="bi bi-list-ul me-2"></i>นักเรียนที่เยี่ยมบ้านแล้ว ปีการศึกษา <?= $year ?> (<?= count($rows) ?> คน)</div>
+        <div class="card-header"><i class="bi bi-list-ul me-2"></i>นักเรียนที่เยี่ยมบ้านแล้ว · <?= e($period['label']) ?> (<?= count($rows) ?> คน)</div>
         <div class="card-body">
             <div class="table-responsive">
                 <table class="table table-sm table-hover datatable" data-order="[]">

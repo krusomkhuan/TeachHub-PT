@@ -2,9 +2,9 @@
 /**
  * ไฟล์: reports/advisor_summary.php
  * สรุปรายงานการพบนักเรียนของครูที่ปรึกษา — ภาพรวมทั้งวิทยาลัย / รายแผนก / รายครู
- *   ?ay= ภาคเรียน, ?dept= แผนก, ?export=csv
+ *   ?ay= ภาคเรียน, ?dept= แผนก, ?period=term|month|week (+ ?month=Y-m / ?week=วันพุธ), ?export=csv
  * สิทธิ์: admin, ผู้บริหาร, งานครูที่ปรึกษาและแนะแนว (ทุกแผนก) / หัวหน้าแผนก (เฉพาะแผนกตนเอง)
- * นับเฉพาะวันพุธที่ถึงแล้วและไม่ใช่วันงดพบ
+ * นับเฉพาะสัปดาห์ที่ถึงแล้ว (อ้างอิงวันพุธของสัปดาห์) และไม่ใช่สัปดาห์งดพบ · รายงานลงวันที่ใดก็ได้ในสัปดาห์
  */
 require_once __DIR__ . '/../config/config.php';
 
@@ -18,7 +18,8 @@ $ay = advisor_academic_year(get_int('ay'));
 $ayId = (int)($ay['id'] ?? 0);
 $dept = $scopeAll ? get_int('dept') : (int)$user['department_id'];
 $departments = $scopeAll ? db_all('SELECT id, name FROM departments ORDER BY name') : [];
-$sum = advisor_summary($ay, $dept);
+$period = advisor_period($ay);
+$sum = advisor_summary($ay, $dept, 0, $period['range']);
 $tot = $sum['totals'];
 $weeks = $sum['weeks'];
 
@@ -43,14 +44,14 @@ if (get('export') === 'csv') {
     $rows[] = [];
     $rows[] = ['รวม', '', $tot['groups'] . ' กลุ่ม', $tot['expected'], $tot['submitted'], $tot['on_time'], $tot['late'], $tot['missing'],
         $tot['approved'], $tot['pending'], $tot['revision'], $tot['submit_pct'], $tot['attend_pct']];
-    $rows[] = ['ภาคเรียน ' . academic_label($ay) . ' · นับวันพุธที่ต้องส่ง ' . count($weeks) . ' สัปดาห์ ถึงวันที่ ' . thai_date(date('Y-m-d'))];
-    log_activity('report_export', 'ส่งออกสรุปรายงานครูที่ปรึกษา ภาคเรียน ' . academic_label($ay));
-    csv_download('advisor_summary_' . str_replace('/', '-', academic_label($ay)) . '.csv',
+    $rows[] = [$period['label'] . ' (ภาคเรียน ' . academic_label($ay) . ') · นับสัปดาห์ที่ต้องส่ง ' . count($weeks) . ' สัปดาห์ ถึงวันที่ ' . thai_date(date('Y-m-d'))];
+    log_activity('report_export', 'ส่งออกสรุปรายงานกิจกรรมโฮมรูม ' . $period['label']);
+    csv_download('advisor_summary_' . str_replace('/', '-', academic_label($ay)) . ($period['range'] ? '_' . $period['range'][0] : '') . '.csv',
         ['ครูที่ปรึกษา', 'แผนก', 'กลุ่มเรียน', 'ต้องส่ง', 'ส่งแล้ว', 'ตรงเวลา', 'ส่งช้า', 'ขาดส่ง', 'ผ่าน', 'รอตรวจ', 'ให้แก้ไข', 'ร้อยละการส่ง', 'ร้อยละการเข้าพบของนักเรียน'],
         $rows);
 }
 
-$qs = fn(array $over) => '?' . http_build_query(array_filter(array_merge(['ay' => $ayId, 'dept' => $scopeAll ? ($dept ?: null) : null], $over), fn($v) => $v !== null && $v !== ''));
+$qs = fn(array $over) => '?' . http_build_query(array_filter(array_merge(['ay' => $ayId, 'dept' => $scopeAll ? ($dept ?: null) : null] + advisor_period_query($period), $over), fn($v) => $v !== null && $v !== ''));
 
 $pageTitle = 'สรุปรายงานครูที่ปรึกษา';
 $pageIcon = 'bi-bar-chart-line';
@@ -71,8 +72,9 @@ require APP_ROOT . '/includes/header.php';
                     <?php endforeach; ?>
                 </select>
             </div>
+            <?= advisor_period_controls($period) ?>
             <?php if ($scopeAll): ?>
-                <div class="col-md-5">
+                <div class="col-md-3">
                     <label class="form-label small mb-1" for="dept">แผนกวิชา</label>
                     <select name="dept" id="dept" class="form-select">
                         <option value="0">ทั้งวิทยาลัย</option>
@@ -88,9 +90,9 @@ require APP_ROOT . '/includes/header.php';
 </div>
 
 <div class="alert alert-light border small"><i class="bi bi-info-circle me-1 text-accent"></i>
-    ภาคเรียน <?= e(academic_label($ay)) ?><?= $scopeAll ? '' : ' · ' . e($user['department_name'] ?? '') ?> ·
-    นับวันพุธที่ต้องส่งแล้ว <strong><?= count($weeks) ?></strong> สัปดาห์ (ถึง <?= e(thai_date(date('Y-m-d'))) ?>, ไม่รวมวันงดพบ)
-    · ส่งตรงเวลา = ภายใน <?= advisor_late_days() ?> วันหลังวันพุธ</div>
+    <strong><?= e($period['label']) ?></strong><?= $period['range'] ? ' (ภาคเรียน ' . e(academic_label($ay)) . ')' : '' ?><?= $scopeAll ? '' : ' · ' . e($user['department_name'] ?? '') ?> ·
+    นับสัปดาห์ที่ต้องส่งแล้ว <strong><?= count($weeks) ?></strong> สัปดาห์ (ถึง <?= e(thai_date(date('Y-m-d'))) ?>, ไม่รวมวันงดพบ)
+    · ส่งตรงเวลา = ภายใน <?= advisor_late_days() ?> วันหลังวันที่พบนักเรียน</div>
 
 <div class="row g-3 mb-4">
     <?php foreach ([
@@ -165,8 +167,47 @@ require APP_ROOT . '/includes/header.php';
     </div>
 <?php endif; ?>
 
+<?php if ($period['mode'] === 'week' && $weeks):
+    [$wMon, $wSun] = advisor_week_range($period['week']);
+    $weekRows = db_all(
+        "SELECT g.id AS group_id, g.group_name, g.teacher_id, CONCAT(u.prefix, u.first_name, ' ', u.last_name) AS teacher_name, d.name AS department_name,
+                r.id, r.meet_date, r.status, r.is_late, r.total_students, r.present_count, r.late_count
+         FROM advisor_groups g JOIN users u ON u.id = g.teacher_id LEFT JOIN departments d ON d.id = g.department_id
+         LEFT JOIN advisor_reports r ON r.group_id = g.id AND r.meet_date BETWEEN ? AND ?
+         WHERE g.academic_year_id = ? AND (? = 0 OR g.department_id = ?)
+         ORDER BY (r.id IS NULL) DESC, d.name, u.first_name",
+        'ssiii',
+        [$wMon, $wSun, $ayId, $dept, $dept]
+    ); ?>
+    <div class="card mb-4">
+        <div class="card-header"><i class="bi bi-calendar-week me-2"></i>รายงานรายกลุ่ม <?= e($period['label']) ?></div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover datatable" data-order="[]">
+                    <thead><tr><th>ครูที่ปรึกษา</th><th>กลุ่มเรียน</th><th>แผนก</th><th>วันที่พบ</th><th class="text-center">เข้าพบ</th><th>สถานะ</th><th class="no-sort"></th></tr></thead>
+                    <tbody>
+                    <?php foreach ($weekRows as $w): ?>
+                        <tr>
+                            <td><?= e($w['teacher_name']) ?></td>
+                            <td class="small"><?= e($w['group_name']) ?></td>
+                            <td class="small"><?= e(preg_replace('/^แผนกวิชา/u', '', (string)$w['department_name'])) ?></td>
+                            <td class="small"><?= $w['id'] ? e(advisor_date_label($w['meet_date'])) : '-' ?></td>
+                            <td class="text-center small"><?= $w['id'] ? ((int)$w['present_count'] + (int)$w['late_count']) . '/' . (int)$w['total_students'] : '-' ?></td>
+                            <td><?= $w['id'] ? status_badge($w['status'], (bool)$w['is_late']) : '<span class="badge bg-danger bg-opacity-75">ขาดส่ง</span>' ?></td>
+                            <td class="text-end"><?php if ($w['id'] && can_view_advisor_teacher($user, (int)$w['teacher_id'])): ?>
+                                <a href="<?= e(url((int)$w['teacher_id'] === (int)$user['id'] ? 'teacher/advisor_reports.php?id=' . (int)$w['id'] : (can_manage_advisor($user) ? 'review/advisor_reports.php?id=' . (int)$w['id'] : 'reports/advisor_teacher.php?report=' . (int)$w['id']))) ?>" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a>
+                            <?php endif; ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+<?php endif; ?>
+
 <div class="card">
-    <div class="card-header"><i class="bi bi-table me-2"></i>สรุปรายครูที่ปรึกษา</div>
+    <div class="card-header"><i class="bi bi-table me-2"></i>สรุปรายครูที่ปรึกษา · <?= e($period['label']) ?></div>
     <div class="card-body">
         <div class="table-responsive">
             <table class="table table-hover datatable" data-order='[[7, "desc"]]'>
@@ -186,7 +227,7 @@ require APP_ROOT . '/includes/header.php';
                         <td class="text-center <?= $t['missing'] ? 'text-danger fw-semibold' : '' ?>"><?= $t['missing'] ?></td>
                         <td class="text-center small"><?= $t['approved'] ?>/<?= $t['pending'] ?>/<?= $t['revision'] ?></td>
                         <td class="text-center" data-order="<?= $t['submit_pct'] ?>"><?= $t['submit_pct'] ?>%</td>
-                        <td class="text-end"><a href="<?= e(url('reports/advisor_teacher.php?teacher=' . $t['teacher_id'] . '&ay=' . $ayId)) ?>" class="btn btn-sm btn-outline-primary text-nowrap"><i class="bi bi-eye"></i> รายละเอียด</a></td>
+                        <td class="text-end"><a href="<?= e(url('reports/advisor_teacher.php?' . http_build_query(array_filter(['teacher' => $t['teacher_id'], 'ay' => $ayId] + advisor_period_query($period))))) ?>" class="btn btn-sm btn-outline-primary text-nowrap"><i class="bi bi-eye"></i> รายละเอียด</a></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>

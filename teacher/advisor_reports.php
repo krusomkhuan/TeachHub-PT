@@ -1,9 +1,10 @@
 <?php
 /**
  * ไฟล์: teacher/advisor_reports.php
- * รายงานการพบนักเรียนของครูที่ปรึกษา — ส่งสัปดาห์ละ 1 ครั้ง (ทุกวันพุธ) ต่อ 1 กลุ่มเรียน
- *   (ไม่มี)            ตารางวันพุธของภาคเรียน + สถานะการส่งแต่ละกลุ่ม   ?ay= เลือกภาคเรียน
- *   ?group=xx&date=..  ส่งรายงานใหม่ของกลุ่ม/วันพุธนั้น
+ * รายงานกิจกรรมโฮมรูมของครูที่ปรึกษา — ส่งสัปดาห์ละ 1 ครั้งต่อ 1 กลุ่มเรียน (เลือกวันที่พบนักเรียนได้ทุกวันในสัปดาห์)
+ *   (ไม่มี)            ตารางรายสัปดาห์ของภาคเรียน + สถานะการส่งแต่ละกลุ่ม   ?ay= เลือกภาคเรียน
+ *   ?new=1&ay=..       สร้างบันทึกใหม่ แล้วเลือกกลุ่ม/วันที่จากปฏิทินในฟอร์ม
+ *   ?group=xx&date=..  ส่งรายงานใหม่ของกลุ่ม/วันที่นั้น (จากปุ่มในตาราง)
  *   ?id=xx             ดูรายงาน   ?edit=xx  แก้ไขรายงาน (เฉพาะสถานะ "รอตรวจ" หรือ "ให้แก้ไข")
  * กลุ่มที่ปรึกษากำหนดโดยงานครูที่ปรึกษาและแนะแนว (review/advisor_groups.php)
  */
@@ -74,19 +75,31 @@ if (is_post()) {
             abort_page(403, 'ไม่ใช่กลุ่มที่ปรึกษาของท่าน');
         }
         $meetDate = $rep ? $rep['meet_date'] : post('meet_date');
+        $postNewMode = !$rep && post('mode') === 'new'; // ส่งมาจากฟอร์ม "สร้างบันทึก" ที่เลือกวันที่เอง
         if (!$rep) {
-            $reason = advisor_date_block_reason(advisor_academic_year((int)$advGroup['academic_year_id']), $meetDate);
-            if ($reason !== '') {
+            $reason = $meetDate === '' ? 'กรุณาเลือกวันที่พบนักเรียน'
+                : advisor_date_block_reason(advisor_academic_year((int)$advGroup['academic_year_id']), $meetDate);
+            if ($reason !== '' && $postNewMode) {
+                $dateError = $reason; // แสดงในฟอร์มเดิม ข้อมูลที่กรอกไม่หาย (ใส่ใน $errors หลังตรวจข้อมูลอื่น)
+            } elseif ($reason !== '') {
                 flash('error', $reason);
                 redirect($self . '?ay=' . (int)$advGroup['academic_year_id']);
             }
-            $existing = db_value('SELECT id FROM advisor_reports WHERE group_id = ? AND meet_date = ?', 'is', [(int)$advGroup['id'], $meetDate]);
-            if ($existing) {
-                flash('warning', 'ส่งรายงานของวันนี้แล้ว หากต้องการแก้ไขให้กด "แก้ไข"');
+            // 1 รายงานต่อกลุ่มต่อสัปดาห์ (จันทร์–อาทิตย์)
+            $existing = $reason === '' ? advisor_week_report_id((int)$advGroup['id'], $meetDate) : null;
+            if ($existing && $postNewMode) {
+                [$wMon, $wSun] = advisor_week_range($meetDate);
+                $dateError = 'กลุ่ม ' . $advGroup['group_name'] . ' ส่งรายงานของสัปดาห์ ' . thai_date($wMon) . ' – ' . thai_date($wSun) . ' แล้ว'
+                    . ' (ส่งได้สัปดาห์ละ 1 ครั้ง) หากต้องการแก้ไข ให้เปิดรายงานเดิมจากหน้ารายการ';
+            } elseif ($existing) {
+                flash('warning', 'ส่งรายงานของสัปดาห์นี้แล้ว หากต้องการแก้ไขให้กด "แก้ไข"');
                 redirect($self . '?id=' . (int)$existing);
             }
         }
         $d = advisor_validate($errors);
+        if (!empty($dateError)) {
+            $errors['meet_date'] = $dateError;
+        }
 
         $newFiles = normalize_multi_files($_FILES['images'] ?? null);
         $existingImages = $rep ? count(advisor_report_images((int)$rep['id'])) : 0;
@@ -151,7 +164,7 @@ if (is_post()) {
                 }
                 throw $ex;
             }
-            $label = $advGroup['group_name'] . ' วันพุธที่ ' . thai_date($meetDate);
+            $label = $advGroup['group_name'] . ' วันที่ ' . thai_date($meetDate);
             if ($rep) {
                 log_activity('advisor_report_update', 'แก้ไขรายงานครูที่ปรึกษา ' . $label);
                 flash('success', 'บันทึกการแก้ไขแล้ว สถานะเป็น "รอตรวจ"');
@@ -167,6 +180,10 @@ if (is_post()) {
         } else {
             $_GET['group'] = (string)$advGroup['id'];
             $_GET['date'] = $meetDate;
+            if ($postNewMode) {
+                $_GET['new'] = '1';
+                $_GET['ay'] = (string)$advGroup['academic_year_id'];
+            }
         }
     }
 
@@ -198,7 +215,7 @@ if (is_post()) {
             redirect($self . '?id=' . (int)$rep['id']);
         }
         advisor_report_delete($rep);
-        log_activity('advisor_report_delete', 'ลบรายงานครูที่ปรึกษา ' . $rep['group_name'] . ' วันพุธที่ ' . thai_date($rep['meet_date']));
+        log_activity('advisor_report_delete', 'ลบรายงานครูที่ปรึกษา ' . $rep['group_name'] . ' วันที่ ' . thai_date($rep['meet_date']));
         flash('success', 'ลบรายงานแล้ว');
         redirect($self . '?ay=' . (int)$rep['academic_year_id']);
     }
@@ -216,9 +233,9 @@ if ($viewId > 0) {
     if (!$rep) {
         abort_page(404, 'ไม่พบรายงาน', 'รายงานนี้ไม่มีอยู่ หรือไม่ใช่รายงานของท่าน');
     }
-    $pageTitle = 'รายงานการพบนักเรียน';
+    $pageTitle = 'รายงานกิจกรรมโฮมรูม';
     $pageIcon = 'bi-people';
-    $breadcrumbs = ['รายงานครูที่ปรึกษา' => $self . '?ay=' . (int)$rep['academic_year_id'], advisor_date_label($rep['meet_date']) => null];
+    $breadcrumbs = ['รายงานกิจกรรมโฮมรูม' => $self . '?ay=' . (int)$rep['academic_year_id'], advisor_date_label($rep['meet_date']) => null];
     require APP_ROOT . '/includes/header.php';
     ?>
     <?php if ($rep['status'] === 'revision'): ?>
@@ -259,9 +276,43 @@ if ($viewId > 0) {
 // =====================================================================
 $editId = get_int('edit');
 $newGroupId = get_int('group');
-if ($editId > 0 || $newGroupId > 0) {
+$isNew = get('new') === '1'; // สร้างบันทึกใหม่ แล้วเลือกกลุ่ม/วันที่ในฟอร์ม
+if ($editId > 0 || $newGroupId > 0 || $isNew) {
     $rep = null;
-    if ($editId > 0) {
+    $reportedWeeks = []; // โหมดสร้างใหม่: [group_id => [วันพุธของสัปดาห์ที่ส่งแล้ว, ...]]
+    $skipDates = [];     // [Y-m-d => เหตุผล] วันงดพบในภาคเรียน
+    $minDate = $maxDate = '';
+    $myGroups = [];
+    if ($isNew && $editId === 0) {
+        $newAy = advisor_academic_year(get_int('ay'));
+        $myGroups = $newAy ? advisor_teacher_groups($uid, (int)$newAy['id']) : [];
+        if (!$myGroups) {
+            flash('error', 'ท่านยังไม่มีกลุ่มที่ปรึกษาในภาคเรียนนี้ กรุณาติดต่องานครูที่ปรึกษาและแนะแนว');
+            redirect($self . ($newAy ? '?ay=' . (int)$newAy['id'] : ''));
+        }
+        // ปฏิทิน: เลือกได้ตั้งแต่วันเปิดภาคเรียน ถึงวันนี้ (ไม่เกินวันปิดภาคเรียน)
+        $minDate = (string)($newAy['start_date'] ?? '');
+        $maxDate = min(date('Y-m-d'), (string)($newAy['end_date'] ?? ''));
+        if ($minDate !== '' && $maxDate !== '') {
+            $skipDates = advisor_skip_dates($minDate, $maxDate);
+        }
+        foreach (db_all(
+            'SELECT r.group_id, r.meet_date FROM advisor_reports r JOIN advisor_groups g ON g.id = r.group_id
+             WHERE r.teacher_id = ? AND g.academic_year_id = ?',
+            'ii',
+            [$uid, (int)$newAy['id']]
+        ) as $r) {
+            $reportedWeeks[(int)$r['group_id']][] = advisor_week_wed($r['meet_date']);
+        }
+        $groupIds = array_map(fn($g) => (int)$g['id'], $myGroups);
+        $selGroup = in_array($newGroupId, $groupIds, true) ? $newGroupId : $groupIds[0];
+        $advGroup = advisor_group_fetch($selGroup);
+        // วันที่เริ่มต้น: ที่เลือกมา (ถ้าอยู่ในช่วง) หรือวันนี้ (ถ้าอยู่ในภาคเรียน)
+        $meetDate = get('date');
+        if ($minDate === '' || $maxDate < $minDate || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $meetDate) || $meetDate < $minDate || $meetDate > $maxDate) {
+            $meetDate = ($minDate !== '' && $maxDate >= $minDate && date('Y-m-d') === $maxDate) ? $maxDate : '';
+        }
+    } elseif ($editId > 0) {
         $rep = own_advisor_report($editId, $uid);
         if (!$rep) {
             abort_page(404, 'ไม่พบรายงาน');
@@ -283,20 +334,21 @@ if ($editId > 0 || $newGroupId > 0) {
             flash('error', $reason);
             redirect($self . '?ay=' . (int)$advGroup['academic_year_id']);
         }
-        $existing = db_value('SELECT id FROM advisor_reports WHERE group_id = ? AND meet_date = ?', 'is', [(int)$advGroup['id'], $meetDate]);
+        $existing = advisor_week_report_id((int)$advGroup['id'], $meetDate);
         if ($existing) {
             redirect($self . '?id=' . (int)$existing);
         }
     }
     $images = $rep ? advisor_report_images((int)$rep['id']) : [];
-    $isLate = $rep ? (bool)$rep['is_late'] : advisor_is_late_now($meetDate);
+    $isLate = $rep ? (bool)$rep['is_late'] : ($meetDate !== '' && advisor_is_late_now($meetDate));
+    $newMode = $isNew && !$rep;
     $v = function (string $k, string $default = '') use ($rep): string {
         return is_post() ? post($k) : (string)($rep[$k] ?? $default);
     };
 
-    $pageTitle = $rep ? 'แก้ไขรายงานการพบนักเรียน' : 'ส่งรายงานการพบนักเรียน';
+    $pageTitle = $rep ? 'แก้ไขรายงานกิจกรรมโฮมรูม' : ($newMode ? 'สร้างบันทึกกิจกรรมโฮมรูม' : 'ส่งรายงานกิจกรรมโฮมรูม');
     $pageIcon = 'bi-people';
-    $breadcrumbs = ['รายงานครูที่ปรึกษา' => $self . '?ay=' . (int)$advGroup['academic_year_id'], advisor_date_label($meetDate) => null];
+    $breadcrumbs = ['รายงานกิจกรรมโฮมรูม' => $self . '?ay=' . (int)$advGroup['academic_year_id'], ($newMode ? 'บันทึกใหม่' : advisor_date_label($meetDate)) => null];
     require APP_ROOT . '/includes/header.php';
     ?>
     <?php if ($rep && $rep['status'] === 'revision'): ?>
@@ -305,26 +357,61 @@ if ($editId > 0 || $newGroupId > 0) {
             <?= nl2br(e((string)$rep['review_comment'])) ?: '-' ?>
         </div>
     <?php endif; ?>
-    <?php if ($isLate): ?>
-        <div class="alert alert-warning small"><i class="bi bi-clock-history me-1"></i>
-            เลยกำหนดส่งของสัปดาห์นี้แล้ว (ภายใน <?= e(thai_date(advisor_deadline($meetDate))) ?>) รายงานจะถูกบันทึกเป็น <span class="badge badge-late">ส่งช้า</span></div>
+    <?php if ($isLate || $newMode): ?>
+        <div class="alert alert-warning small<?= $isLate ? '' : ' d-none' ?>" id="lateAlert"><i class="bi bi-clock-history me-1"></i>
+            เลยกำหนดส่งของสัปดาห์นี้แล้ว (ภายใน <span id="lateDeadline"><?= $meetDate !== '' ? e(thai_date(advisor_deadline($meetDate))) : '' ?></span>) รายงานจะถูกบันทึกเป็น <span class="badge badge-late">ส่งช้า</span></div>
     <?php endif; ?>
 
     <form method="post" enctype="multipart/form-data" novalidate data-confirm="<?= $rep ? 'ยืนยันบันทึกการแก้ไข?' : 'ยืนยันส่งรายงาน?' ?>">
         <?= csrf_field() ?>
         <input type="hidden" name="action" value="save">
         <input type="hidden" name="id" value="<?= (int)($rep['id'] ?? 0) ?>">
-        <input type="hidden" name="group_id" value="<?= (int)$advGroup['id'] ?>">
-        <input type="hidden" name="meet_date" value="<?= e($meetDate) ?>">
+        <?php if ($newMode): ?>
+            <input type="hidden" name="mode" value="new">
+            <input type="hidden" name="ay" value="<?= (int)$advGroup['academic_year_id'] ?>">
+        <?php else: ?>
+            <input type="hidden" name="group_id" value="<?= (int)$advGroup['id'] ?>">
+            <input type="hidden" name="meet_date" value="<?= e($meetDate) ?>">
+        <?php endif; ?>
 
         <div class="card mb-4">
             <div class="card-header"><i class="bi bi-info-circle me-2"></i>ข้อมูลการพบนักเรียน</div>
             <div class="card-body">
+                <?php if ($newMode): ?>
+                    <div class="row g-3 mb-2">
+                        <div class="col-md-5">
+                            <label class="form-label fw-semibold" for="group_id">กลุ่มเรียน *</label>
+                            <select class="form-select" name="group_id" id="group_id">
+                                <?php foreach ($myGroups as $g): ?>
+                                    <option value="<?= (int)$g['id'] ?>" data-students="<?= (int)$g['student_count'] ?>" <?= (int)$g['id'] === (int)$advGroup['id'] ? 'selected' : '' ?>>
+                                        <?= e($g['group_name']) ?> (<?= (int)$g['student_count'] ?> คน)<?php $co = advisor_co_advisors((int)$g['academic_year_id'], (string)$g['group_name'], $uid); ?><?= $co ? ' · ร่วมกับ ' . e(implode(', ', $co)) : '' ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-7">
+                            <label class="form-label fw-semibold" for="meet_date">วันที่พบนักเรียน *</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-calendar3"></i></span>
+                                <input type="date" class="form-control<?= $invalid('meet_date') ?>" name="meet_date" id="meet_date" value="<?= e($meetDate) ?>"
+                                       min="<?= e($minDate) ?>" max="<?= e($maxDate) ?>" required>
+                            </div>
+                            <div class="small mt-1" id="dateNote"></div>
+                            <?= $err('meet_date') ?>
+                            <div class="form-text">เลือกได้ทุกวันตั้งแต่เปิดภาคเรียน<?= $minDate !== '' ? ' (' . e(thai_date($minDate)) . ')' : '' ?> ถึงวันนี้
+                                · ส่งได้สัปดาห์ละ 1 ครั้งต่อกลุ่มเรียน (จันทร์–อาทิตย์)</div>
+                        </div>
+                    </div>
+                    <?php if ($minDate === '' || $maxDate < $minDate): ?>
+                        <div class="alert alert-info small mb-2">ยังบันทึกไม่ได้ เพราะยังไม่ถึงวันเปิดภาคเรียน<?= $minDate !== '' ? ' (' . e(thai_date($minDate)) . ')' : ' หรือภาคเรียนยังไม่ได้กำหนดวันเปิด-ปิด' ?></div>
+                    <?php endif; ?>
+                <?php else: ?>
                 <div class="row g-3 mb-2">
                     <div class="col-md-4"><div class="small text-muted">กลุ่มเรียน</div><div class="fw-semibold"><?= e($advGroup['group_name']) ?></div></div>
-                    <div class="col-md-4"><div class="small text-muted">แผนก</div><div><?= e($advGroup['department_name'] ?? '-') ?></div></div>
-                    <div class="col-md-4"><div class="small text-muted">วันที่พบนักเรียน</div><div class="fw-semibold"><?= e(thai_date($meetDate, false, true)) ?> (วันพุธ)</div></div>
+                    <div class="col-md-4"><div class="small text-muted">แผนก</div><div><?= e($advGroup['department_name'] ?? '-') ?></div>
+                        <?php $co = advisor_co_advisors((int)$advGroup['academic_year_id'], (string)$advGroup['group_name'], $uid); if ($co): ?><div class="small text-muted mt-1">ครูที่ปรึกษาร่วม: <?= e(implode(', ', $co)) ?></div><?php endif; ?></div>
+                    <div class="col-md-4"><div class="small text-muted">วันที่พบนักเรียน</div><div class="fw-semibold"><?= e(advisor_date_label($meetDate)) ?></div></div>
                 </div>
+                <?php endif; ?>
                 <hr>
                 <div class="fw-semibold mb-2">จำนวนนักเรียน (คน)</div>
                 <div class="row g-2">
@@ -415,12 +502,57 @@ if ($editId > 0 || $newGroupId > 0) {
         document.querySelectorAll(".advisor-count").forEach(function (el) { el.addEventListener("input", check); });
         check();
     })();';
+    if ($newMode) {
+        // ปฏิทินวันที่พบนักเรียน: แสดงชื่อวัน · เตือนเมื่อสัปดาห์นั้นส่งแล้ว/เป็นวันงดพบ · แสดง/ซ่อนคำเตือนส่งช้า
+        // เปลี่ยนกลุ่ม: ตั้งจำนวนนักเรียนตามกลุ่ม (ถ้ายังไม่ได้แก้เอง)
+        $pageScripts .= '(function () {
+        var reported = ' . json_encode((object)$reportedWeeks) . ', skips = ' . json_encode((object)$skipDates, JSON_UNESCAPED_UNICODE) . ';
+        var today = "' . date('Y-m-d') . '", lateDays = ' . advisor_late_days() . ';
+        var grp = document.getElementById("group_id"), dt = document.getElementById("meet_date"), total = document.getElementById("total_students");
+        var note = document.getElementById("dateNote"), alertBox = document.getElementById("lateAlert"), deadline = document.getElementById("lateDeadline");
+        var days = ["วันอาทิตย์", "วันจันทร์", "วันอังคาร", "วันพุธ", "วันพฤหัสบดี", "วันศุกร์", "วันเสาร์"];
+        var months = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+        function parse(s) { var p = s.split("-"); return new Date(+p[0], +p[1] - 1, +p[2]); }
+        function ymd(d) { return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2); }
+        function thai(d) { return d.getDate() + " " + months[d.getMonth()] + " " + (d.getFullYear() + 543); }
+        function addDays(d, n) { var x = new Date(d); x.setDate(x.getDate() + n); return x; }
+        function weekWed(d) { var dow = d.getDay() || 7; return addDays(d, 3 - dow); }
+        var totalTouched = ' . (is_post() ? 'true' : 'false') . ';
+        total.addEventListener("input", function () { totalTouched = true; });
+        function sync() {
+            dt.setCustomValidity("");
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(dt.value)) { note.textContent = ""; alertBox.classList.add("d-none"); return; }
+            var d = parse(dt.value), wed = weekWed(d), msg = "", bad = false;
+            var mon = addDays(wed, -2), sun = addDays(wed, 4);
+            if ((reported[grp.value] || []).indexOf(ymd(wed)) !== -1) {
+                msg = "กลุ่มนี้ส่งรายงานของสัปดาห์ " + thai(mon) + " – " + thai(sun) + " แล้ว (ส่งได้สัปดาห์ละ 1 ครั้ง)"; bad = true;
+            } else if (skips[dt.value] !== undefined) {
+                msg = "วันที่นี้เป็นวันงดพบ" + (skips[dt.value] ? " (" + skips[dt.value] + ")" : ""); bad = true;
+            } else {
+                msg = days[d.getDay()] + "ที่ " + thai(d) + " · นับเป็นรายงานของสัปดาห์ " + thai(mon) + " – " + thai(sun);
+            }
+            note.className = "small mt-1 " + (bad ? "text-danger" : "text-muted");
+            note.textContent = msg;
+            if (bad) dt.setCustomValidity(msg);
+            var dl = addDays(d, lateDays);
+            alertBox.classList.toggle("d-none", bad || !(today > ymd(dl)));
+            deadline.textContent = thai(dl);
+        }
+        grp.addEventListener("change", function () {
+            if (!totalTouched) { total.value = grp.selectedOptions[0].dataset.students; total.dispatchEvent(new Event("input")); totalTouched = false; }
+            sync();
+        });
+        dt.addEventListener("change", sync);
+        dt.addEventListener("input", sync);
+        sync();
+    })();';
+    }
     require APP_ROOT . '/includes/footer.php';
     exit;
 }
 
 // =====================================================================
-// หน้ารายการ: ตารางวันพุธของภาคเรียน
+// หน้ารายการ: ตารางรายสัปดาห์ของภาคเรียน (แถวละ 1 สัปดาห์ อ้างอิงวันพุธของสัปดาห์)
 // =====================================================================
 $years = db_all('SELECT * FROM academic_years ORDER BY year DESC, semester DESC');
 $ay = advisor_academic_year(get_int('ay'));
@@ -446,18 +578,21 @@ foreach (db_all(
     'ii',
     [$uid, $ayId]
 ) as $r) {
-    $reports[(int)$r['group_id']][$r['meet_date']] = $r;
+    $reports[(int)$r['group_id']][advisor_week_wed($r['meet_date'])] = $r; // คีย์ = วันพุธของสัปดาห์ที่รายงานนั้นอยู่
 }
 
-$pageTitle = 'รายงานการพบนักเรียน (ครูที่ปรึกษา)';
+$pageTitle = 'รายงานกิจกรรมโฮมรูม (ครูที่ปรึกษา)';
 $pageIcon = 'bi-people';
-$breadcrumbs = ['รายงานครูที่ปรึกษา' => null];
-$pageActions = $groups ? '<a href="' . e(url('reports/advisor_teacher.php?teacher=' . $uid . '&ay=' . $ayId)) . '" class="btn btn-outline-primary"><i class="bi bi-bar-chart-line me-1"></i> สรุปของฉัน</a>' : '';
+$breadcrumbs = ['รายงานกิจกรรมโฮมรูม' => null];
+$pageActions = $groups
+    ? '<a href="' . e(url('reports/advisor_teacher.php?teacher=' . $uid . '&ay=' . $ayId)) . '" class="btn btn-outline-primary"><i class="bi bi-bar-chart-line me-1"></i> สรุปของฉัน</a>'
+      . ' <a href="' . e(url($self . '?new=1&ay=' . $ayId)) . '" class="btn btn-accent"><i class="bi bi-plus-lg me-1"></i> สร้างบันทึกกิจกรรมโฮมรูม</a>'
+    : '';
 require APP_ROOT . '/includes/header.php';
 ?>
 <div class="alert alert-light border small"><i class="bi bi-info-circle me-1 text-accent"></i>
-    ครูที่ปรึกษาส่งรายงานการพบนักเรียน <strong>สัปดาห์ละ 1 ครั้ง ทุกวันพุธ</strong> (1 รายงานต่อ 1 กลุ่มเรียน)
-    ส่งได้ภายใน <?= advisor_late_days() ?> วันหลังวันพุธ หากเลยกำหนดยังส่งย้อนหลังได้แต่จะติดป้าย <span class="badge badge-late">ส่งช้า</span></div>
+    ครูที่ปรึกษาส่งรายงานกิจกรรมโฮมรูม <strong>สัปดาห์ละ 1 ครั้ง</strong> (1 รายงานต่อ 1 กลุ่มเรียน) เลือกวันที่พบนักเรียนได้ทุกวันในสัปดาห์
+    ส่งได้ภายใน <?= advisor_late_days() ?> วันหลังวันที่พบนักเรียน หากเลยกำหนดยังส่งย้อนหลังได้แต่จะติดป้าย <span class="badge badge-late">ส่งช้า</span></div>
 
 <div class="card mb-4">
     <div class="card-body">
@@ -498,13 +633,14 @@ require APP_ROOT . '/includes/header.php';
     <?php endif; ?>
 
     <div class="card">
-        <div class="card-header"><i class="bi bi-calendar-week me-2"></i>วันพุธของภาคเรียน <?= e(academic_label($ay)) ?></div>
+        <div class="card-header"><i class="bi bi-calendar-week me-2"></i>รายสัปดาห์ของภาคเรียน <?= e(academic_label($ay)) ?></div>
         <div class="card-body">
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
                     <thead>
-                    <tr><th style="width:180px">วันพุธ</th>
-                        <?php foreach ($groups as $g): ?><th><?= e($g['group_name']) ?> <span class="text-muted small fw-normal">(<?= (int)$g['student_count'] ?> คน)</span></th><?php endforeach; ?>
+                    <tr><th style="width:210px">สัปดาห์</th>
+                        <?php foreach ($groups as $g): $co = advisor_co_advisors($ayId, (string)$g['group_name'], $uid); ?><th><?= e($g['group_name']) ?> <span class="text-muted small fw-normal">(<?= (int)$g['student_count'] ?> คน)</span>
+                            <?php if ($co): ?><div class="small text-muted fw-normal">ร่วมกับ <?= e(implode(', ', $co)) ?></div><?php endif; ?></th><?php endforeach; ?>
                     </tr>
                     </thead>
                     <tbody>
@@ -513,12 +649,15 @@ require APP_ROOT . '/includes/header.php';
                             ยังไม่ถึงวันพุธแรกของภาคเรียน<?= $ay['start_date'] ? ' (เปิดภาคเรียน ' . e(thai_date($ay['start_date'])) . ')' : '' ?></td></tr>
                     <?php endif; ?>
                     <?php foreach ($weeks as $date => $skip): ?>
+                        <?php [$wMon, $wSun] = advisor_week_range($date);
+                              $weekStarted = $wMon <= $today; // สัปดาห์ที่เริ่มแล้ว (วันจันทร์ถึงแล้ว) บันทึกได้
+                              $weekHasReport = (bool)array_filter($groups, fn($g) => isset($reports[(int)$g['id']][$date])); ?>
                         <tr class="<?= $date === $next ? 'table-light' : '' ?>">
-                            <td class="text-nowrap"><?= e(advisor_date_label($date)) ?></td>
-                            <?php if ($skip !== null): ?>
+                            <td class="text-nowrap"><?= e(thai_date($wMon)) ?> – <?= e(thai_date($wSun)) ?></td>
+                            <?php if ($skip !== null && !$weekHasReport): ?>
                                 <td colspan="<?= count($groups) ?>"><span class="badge bg-secondary"><i class="bi bi-calendar-x me-1"></i>งดพบ</span>
                                     <span class="small text-muted"><?= e($skip) ?></span></td>
-                            <?php elseif ($date > $today): ?>
+                            <?php elseif (!$weekStarted && !$weekHasReport): ?>
                                 <td colspan="<?= count($groups) ?>" class="small text-muted"><i class="bi bi-hourglass me-1"></i>สัปดาห์ถัดไป (ยังไม่ถึงกำหนด)</td>
                             <?php else: ?>
                                 <?php foreach ($groups as $g): $r = $reports[(int)$g['id']][$date] ?? null; ?>
@@ -527,10 +666,11 @@ require APP_ROOT . '/includes/header.php';
                                             <?= status_badge($r['status'], (bool)$r['is_late']) ?>
                                             <a href="<?= e(url($self . '?id=' . (int)$r['id'])) ?>" class="btn btn-sm btn-link">
                                                 <?= $r['status'] === 'revision' ? 'แก้ไข' : 'ดู' ?></a>
+                                            <div class="small text-muted"><?= e(advisor_date_label($r['meet_date'])) ?></div>
                                         <?php else: ?>
                                             <?= status_badge('not_submitted') ?>
                                             <?php if (advisor_is_late_now($date)): ?><span class="small text-danger ms-1">เลยกำหนด</span><?php endif; ?>
-                                            <a href="<?= e(url($self . '?group=' . (int)$g['id'] . '&date=' . $date)) ?>" class="btn btn-sm btn-accent ms-1">
+                                            <a href="<?= e(url($self . '?new=1&ay=' . $ayId . '&group=' . (int)$g['id'] . '&date=' . min($date, $today))) ?>" class="btn btn-sm btn-accent ms-1">
                                                 <i class="bi bi-send"></i> ส่งรายงาน</a>
                                         <?php endif; ?>
                                     </td>

@@ -55,13 +55,20 @@ $add('ฐานข้อมูล', 'ok', 'เวอร์ชัน MySQL/MariaD
 $charset = (string)db_value('SELECT DEFAULT_CHARACTER_SET_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = DATABASE()');
 $add('ฐานข้อมูล', $charset === 'utf8mb4' ? 'ok' : 'warn', 'Charset ของฐานข้อมูล', $charset . ($charset === 'utf8mb4' ? '' : ' (แนะนำ utf8mb4)'));
 $tables = (int)db_value('SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE()');
-$add('ฐานข้อมูล', $tables >= 34 ? 'ok' : 'fail', 'จำนวนตาราง', $tables . ' ตาราง (ต้องมี 34'
+$add('ฐานข้อมูล', $tables >= 38 ? 'ok' : 'fail', 'จำนวนตาราง', $tables . ' ตาราง (ต้องมี 38'
+    . ($tables === 35 ? ' — ยังไม่ได้นำเข้า update_v1.15.sql' : '')
+    . ($tables === 34 ? ' — ยังไม่ได้นำเข้า update_v1.14.sql' : '')
     . ($tables === 32 ? ' — ยังไม่ได้นำเข้า update_v1.13.sql' : '')
     . ($tables === 28 ? ' — ยังไม่ได้นำเข้า update_v1.12.sql' : '')
     . ($tables === 26 ? ' — ยังไม่ได้นำเข้า update_v1.11.sql' : '')
     . ($tables === 20 ? ' — ยังไม่ได้นำเข้า update_v1.1.sql และ update_v1.2.sql' : '')
     . ($tables === 23 ? ' — ยังไม่ได้นำเข้า update_v1.2.sql' : '')
     . ($tables === 25 ? ' — ยังไม่ได้นำเข้า update_v1.6.sql' : '') . ')');
+// v1.16: เยี่ยมบ้านนักเรียนคนเดิมได้หลายครั้งต่อปี — ต้องไม่มี UNIQUE (school_year, student_code) แล้ว
+$hvOldUnique = (bool)db_value("SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'home_visits'
+                               AND INDEX_NAME = 'uq_home_visit_student_year' LIMIT 1");
+$add('ฐานข้อมูล', $hvOldUnique ? 'fail' : 'ok', 'โครงสร้างการเยี่ยมบ้าน (v1.16)',
+    $hvOldUnique ? 'ยังไม่ได้นำเข้า update_v1.16.sql — บันทึกเยี่ยมบ้านนักเรียนคนเดิมครั้งที่ 2 จะไม่สำเร็จ' : 'เยี่ยมบ้านนักเรียนคนเดิมได้หลายครั้งต่อปี');
 $add('ข้อมูลพื้นฐาน', report_chain_ready() ? 'ok' : 'warn', 'ผู้พิจารณารายงานการนิเทศ (3 ขั้น)',
     report_chain_ready() ? implode(' → ', array_map(fn($s) => $s['title'] . ' (' . $s['name'] . ')', report_approval_chain()))
         : 'ยังกำหนดไม่ครบ — หัวหน้าแผนกจะเสนอรายงานไม่ได้ (ตั้งค่าระบบ → ผู้พิจารณารายงานการนิเทศ)');

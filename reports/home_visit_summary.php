@@ -2,7 +2,7 @@
 /**
  * ไฟล์: reports/home_visit_summary.php
  * สรุปรายงานการเยี่ยมบ้านนักเรียน — ภาพรวมทั้งวิทยาลัย / รายแผนก / รายครูที่ปรึกษา
- *   ?year= ปีการศึกษา, ?dept= แผนก, ?export=csv
+ *   ?year= ปีการศึกษา, ?sem= ภาคเรียน (ไม่ระบุ = ทั้งปี), ?dept= แผนก, ?export=csv
  * สิทธิ์: admin, ผู้บริหาร, งานครูที่ปรึกษาและแนะแนว (ทุกแผนก) / หัวหน้าแผนก (เฉพาะแผนกตนเอง)
  */
 require_once __DIR__ . '/../config/config.php';
@@ -16,7 +16,8 @@ $years = home_visit_years();
 $year = home_visit_year(get_int('year'));
 $dept = $scopeAll ? get_int('dept') : (int)$user['department_id'];
 $departments = $scopeAll ? db_all('SELECT id, name FROM departments ORDER BY name') : [];
-$sum = home_visit_summary($year, $dept);
+$period = home_visit_period($year);
+$sum = home_visit_summary($year, $dept, 0, $period['sem']);
 $tot = $sum['totals'];
 $risk = home_visit_risk_labels();
 
@@ -33,20 +34,20 @@ foreach ($sum['teachers'] as $t) {
 if (get('export') === 'csv') {
     $rows = [];
     foreach ($sum['teachers'] as $t) {
-        $rows[] = [$t['teacher_name'], $t['department_name'], implode(', ', $t['group_names']), $t['students'], $t['visits'], $t['visit_pct'],
+        $rows[] = [$t['teacher_name'], $t['department_name'], implode(', ', $t['group_names']), $t['students'], $t['visits'], $t['visit_times'], $t['visit_pct'],
             $t['normal'], $t['risk'], $t['problem'], $t['approved'], $t['pending'], $t['revision']];
     }
     $rows[] = [];
-    $rows[] = ['รวม', '', '', $tot['students'], $tot['visits'], $tot['visit_pct'], $tot['normal'], $tot['risk'], $tot['problem'],
+    $rows[] = ['รวม', '', '', $tot['students'], $tot['visits'], $tot['visit_times'], $tot['visit_pct'], $tot['normal'], $tot['risk'], $tot['problem'],
         $tot['approved'], $tot['pending'], $tot['revision']];
-    $rows[] = ['ปีการศึกษา ' . $year . ' · ข้อมูล ณ ' . thai_date(date('Y-m-d'))];
-    log_activity('report_export', 'ส่งออกสรุปการเยี่ยมบ้าน ปีการศึกษา ' . $year);
+    $rows[] = [$period['label'] . ' · ข้อมูล ณ ' . thai_date(date('Y-m-d'))];
+    log_activity('report_export', 'ส่งออกสรุปการเยี่ยมบ้าน ' . $period['label']);
     csv_download('home_visit_summary_' . $year . '.csv',
-        ['ครูที่ปรึกษา', 'แผนก', 'กลุ่มเรียน', 'นักเรียนในที่ปรึกษา', 'เยี่ยมบ้านแล้ว', 'ร้อยละ', 'ปกติ', 'กลุ่มเสี่ยง', 'กลุ่มมีปัญหา', 'ผ่าน', 'รอตรวจ', 'ให้แก้ไข'],
+        ['ครูที่ปรึกษา', 'แผนก', 'กลุ่มเรียน', 'นักเรียนในที่ปรึกษา', 'เยี่ยมบ้านแล้ว (คน)', 'จำนวนครั้งที่เยี่ยม', 'ร้อยละ', 'ปกติ', 'กลุ่มเสี่ยง', 'กลุ่มมีปัญหา', 'ผ่าน', 'รอตรวจ', 'ให้แก้ไข'],
         $rows);
 }
 
-$qs = fn(array $over) => '?' . http_build_query(array_filter(array_merge(['year' => $year, 'dept' => $scopeAll ? ($dept ?: null) : null], $over), fn($v) => $v !== null && $v !== ''));
+$qs = fn(array $over) => '?' . http_build_query(array_filter(array_merge(['year' => $year, 'sem' => $period['sem']['id'] ?? null, 'dept' => $scopeAll ? ($dept ?: null) : null], $over), fn($v) => $v !== null && $v !== ''));
 
 $pageTitle = 'สรุปการเยี่ยมบ้านนักเรียน';
 $pageIcon = 'bi-house-heart';
@@ -61,14 +62,15 @@ require APP_ROOT . '/includes/header.php';
         <form method="get" class="row g-2 align-items-end">
             <div class="col-md-2">
                 <label class="form-label small mb-1" for="year">ปีการศึกษา</label>
-                <select name="year" id="year" class="form-select">
+                <select name="year" id="year" class="form-select" onchange="this.form.sem.value='';this.form.submit()">
                     <?php foreach ($years as $y): ?>
                         <option value="<?= $y ?>" <?= $year === $y ? 'selected' : '' ?>><?= $y ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
+            <?= home_visit_period_controls($period) ?>
             <?php if ($scopeAll): ?>
-                <div class="col-md-5">
+                <div class="col-md-4">
                     <label class="form-label small mb-1" for="dept">แผนกวิชา</label>
                     <select name="dept" id="dept" class="form-select">
                         <option value="0">ทั้งวิทยาลัย</option>
@@ -84,13 +86,13 @@ require APP_ROOT . '/includes/header.php';
 </div>
 
 <div class="alert alert-light border small"><i class="bi bi-info-circle me-1 text-accent"></i>
-    ปีการศึกษา <?= $year ?><?= $scopeAll ? '' : ' · ' . e($user['department_name'] ?? '') ?> · นักเรียนในที่ปรึกษานับจากจำนวนนักเรียนของกลุ่มที่ปรึกษา
+    <strong><?= e($period['label']) ?></strong><?= $scopeAll ? '' : ' · ' . e($user['department_name'] ?? '') ?> · นักเรียนในที่ปรึกษานับจากจำนวนนักเรียนของกลุ่มที่ปรึกษา
     (กลุ่มเดียวกันหลายภาคเรียนนับครั้งเดียว) · ไม่มีการกำหนดเป้าจำนวนการเยี่ยมบ้าน ร้อยละใช้เพื่อดูความครอบคลุม</div>
 
 <div class="row g-3 mb-4">
     <?php foreach ([
         [$tot['teachers'], 'ครูที่ปรึกษา', 'ic-navy', 'bi-person-badge', null],
-        [$tot['visits'] . '/' . $tot['students'], 'นักเรียนที่เยี่ยมบ้านแล้ว', 'ic-blue', 'bi-house-check', $tot['visit_pct']],
+        [$tot['visits'] . '/' . $tot['students'], 'นักเรียนที่เยี่ยมบ้านแล้ว · รวม ' . $tot['visit_times'] . ' ครั้ง', 'ic-blue', 'bi-house-check', $tot['visit_pct']],
         [$tot['normal'], 'ปกติ', 'ic-green', 'bi-emoji-smile', percent($tot['normal'], $tot['visits'])],
         [$tot['risk'], 'กลุ่มเสี่ยง', 'ic-yellow', 'bi-exclamation-triangle', percent($tot['risk'], $tot['visits'])],
         [$tot['problem'], 'กลุ่มมีปัญหา', 'ic-red', 'bi-exclamation-octagon', percent($tot['problem'], $tot['visits'])],
@@ -157,7 +159,7 @@ require APP_ROOT . '/includes/header.php';
     <div class="card-body">
         <div class="table-responsive">
             <table class="table table-hover datatable" data-order='[[4, "desc"]]'>
-                <thead><tr><th>ครูที่ปรึกษา</th><th>แผนก</th><th>กลุ่มเรียน</th><th class="text-center">นักเรียน</th><th class="text-center">เยี่ยมแล้ว</th>
+                <thead><tr><th>ครูที่ปรึกษา</th><th>แผนก</th><th>กลุ่มเรียน</th><th class="text-center">นักเรียน</th><th class="text-center">เยี่ยมแล้ว (คน)</th><th class="text-center">ครั้ง</th>
                     <th class="text-center">ร้อยละ</th><th class="text-center">ปกติ/เสี่ยง/ปัญหา</th><th class="text-center">ผ่าน/รอ/แก้</th><th class="no-sort"></th></tr></thead>
                 <tbody>
                 <?php foreach ($sum['teachers'] as $t): ?>
@@ -167,10 +169,11 @@ require APP_ROOT . '/includes/header.php';
                         <td class="small"><?= e(implode(', ', $t['group_names'])) ?></td>
                         <td class="text-center"><?= $t['students'] ?></td>
                         <td class="text-center fw-semibold"><?= $t['visits'] ?></td>
+                        <td class="text-center"><?= $t['visit_times'] ?></td>
                         <td class="text-center" data-order="<?= $t['visit_pct'] ?>"><?= $t['visit_pct'] ?>%</td>
                         <td class="text-center small"><?= $t['normal'] ?>/<span class="text-warning"><?= $t['risk'] ?></span>/<span class="text-danger"><?= $t['problem'] ?></span></td>
                         <td class="text-center small"><?= $t['approved'] ?>/<?= $t['pending'] ?>/<?= $t['revision'] ?></td>
-                        <td class="text-end"><a href="<?= e(url('reports/home_visit_teacher.php?teacher=' . $t['teacher_id'] . '&year=' . $year)) ?>" class="btn btn-sm btn-outline-primary text-nowrap"><i class="bi bi-eye"></i> รายละเอียด</a></td>
+                        <td class="text-end"><a href="<?= e(url('reports/home_visit_teacher.php?' . http_build_query(array_filter(['teacher' => $t['teacher_id'], 'year' => $year, 'sem' => $period['sem']['id'] ?? null])))) ?>" class="btn btn-sm btn-outline-primary text-nowrap"><i class="bi bi-eye"></i> รายละเอียด</a></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>

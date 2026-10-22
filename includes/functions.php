@@ -394,11 +394,12 @@ function name_prefixes(): array
     return ['นาย', 'นาง', 'นางสาว', 'ว่าที่ร้อยตรี', 'ว่าที่ร้อยตรีหญิง', 'ว่าที่ร้อยโท', 'ว่าที่ร้อยเอก', 'ดร.', 'ผศ.', 'รศ.'];
 }
 
-/** ตำแหน่งที่ให้เลือกตอนสมัคร (รวมรองผู้อำนวยการ 4 ฝ่าย) */
+/** ตำแหน่งที่ให้เลือกตอนสมัคร (รวมผู้อำนวยการ และรองผู้อำนวยการ 4 ฝ่าย) */
 function position_options(): array
 {
     return [
         'ครู', 'ครูผู้ช่วย', 'พนักงานราชการ (ครู)', 'ครูอัตราจ้าง', 'ครูพิเศษสอน',
+        'ผู้อำนวยการ',
         'รองผู้อำนวยการฝ่ายบริหารทรัพยากร',
         'รองผู้อำนวยการฝ่ายยุทธศาสตร์และแผนงาน',
         'รองผู้อำนวยการฝ่ายกิจการนักเรียน นักศึกษา',
@@ -412,10 +413,11 @@ function is_executive_position(string $position): bool
     return mb_strpos($position, 'รองผู้อำนวยการ') === 0 || mb_strpos($position, 'ผู้อำนวยการ') === 0;
 }
 
-/** วิทยฐานะ */
+/** วิทยฐานะ (สายครู + สายผู้บริหาร เช่น ผู้อำนวยการ/รองผู้อำนวยการ) */
 function academic_standing_options(): array
 {
-    return ['', 'ครูชำนาญการ', 'ครูชำนาญการพิเศษ', 'ครูเชี่ยวชาญ', 'ครูเชี่ยวชาญพิเศษ'];
+    return ['', 'ครูชำนาญการ', 'ครูชำนาญการพิเศษ', 'ครูเชี่ยวชาญ', 'ครูเชี่ยวชาญพิเศษ',
+        'ชำนาญการ', 'ชำนาญการพิเศษ', 'เชี่ยวชาญ'];
 }
 
 /** ชื่อเต็มของผู้ใช้ */
@@ -932,7 +934,7 @@ function log_action_label(string $action): string
         'report_return' => 'ส่งกลับรายงานการนิเทศ', 'report_print' => 'พิมพ์รายงานการนิเทศ',
         'submit_research' => 'ส่งวิจัย', 'resubmit_research' => 'ส่งวิจัยฉบับแก้ไข', 'delete_research' => 'ลบวิจัย',
         'advisor_report_submit' => 'ส่งรายงานครูที่ปรึกษา', 'advisor_report_update' => 'แก้ไขรายงานครูที่ปรึกษา',
-        'advisor_report_delete' => 'ลบรายงานครูที่ปรึกษา', 'advisor_report_review' => 'ตรวจรายงานครูที่ปรึกษา',
+        'advisor_report_delete' => 'ลบรายงานครูที่ปรึกษา', 'advisor_report_review' => 'ตรวจรายงานกิจกรรมโฮมรูม',
         'advisor_group_save' => 'บันทึกกลุ่มที่ปรึกษา', 'advisor_group_delete' => 'ลบกลุ่มที่ปรึกษา',
         'advisor_skip_save' => 'กำหนดวันงดพบ', 'advisor_skip_delete' => 'ยกเลิกวันงดพบ',
         'home_visit_submit' => 'ส่งรายงานเยี่ยมบ้าน', 'home_visit_update' => 'แก้ไขรายงานเยี่ยมบ้าน',
@@ -1038,16 +1040,23 @@ function random_password(int $length = 10): string
     return str_shuffle($pw);
 }
 
-/** ชื่อหมวดเอกสารดาวน์โหลด */
-function download_categories(): array
+/**
+ * หมวดเอกสารดาวน์โหลด [code => ชื่อ] เรียงตามลำดับที่ admin กำหนด (ตาราง download_categories)
+ * @param bool $activeOnly true = เฉพาะหมวดที่เปิดใช้งาน (ใช้กับตัวเลือก/แท็บ), false = ทุกหมวด (ใช้แสดงชื่อของเอกสารเดิม)
+ */
+function download_categories(bool $activeOnly = false): array
 {
-    return [
-        'lesson_plan' => 'แบบฟอร์มแผนการสอน',
-        'pa'          => 'แบบ PA',
-        'research'    => 'เค้าโครงวิจัย',
-        'supervision' => 'แบบนิเทศ',
-        'other'       => 'เอกสารอื่น ๆ',
-    ];
+    static $all = null;
+    if ($all === null) {
+        $all = db_all('SELECT code, name, is_active FROM download_categories ORDER BY sort_order, name');
+    }
+    $out = [];
+    foreach ($all as $c) {
+        if (!$activeOnly || (int)$c['is_active'] === 1) {
+            $out[$c['code']] = $c['name'];
+        }
+    }
+    return $out;
 }
 
 // =====================================================================

@@ -37,6 +37,8 @@ $menus = [
             ['โครงการสอน/แผนการสอน', 'admin/lesson_plans.php', 'bi-journal-text'],
             ['ข้อตกลง PA', 'admin/pa.php', 'bi-clipboard-check'],
             ['วิจัยในชั้นเรียน', 'admin/research.php', 'bi-search'],
+            ['ประเมินแผนการจัดการเรียนรู้', 'review/plan_evaluations.php', 'bi-clipboard-data'],
+            ['รายการแบบประเมินแผนฯ', 'admin/plan_eval_criteria.php', 'bi-list-check'],
         ],
         'นิเทศการสอน' => [
             ['1. โดยหัวหน้าแผนก', 'admin/supervision.php', 'bi-calendar-week'],
@@ -48,6 +50,7 @@ $menus = [
             ['รอบการส่งงาน', 'admin/rounds.php', 'bi-hourglass-split'],
             ['รายงานผล', 'reports/index.php', 'bi-bar-chart-line'],
             ['เกณฑ์การส่งรายภาคเรียน', 'reports/teaching_compliance.php', 'bi-clipboard2-check'],
+            ['รายงานผลประเมินแผนฯ', 'reports/plan_eval_summary.php', 'bi-graph-up'],
         ],
         'ข้อมูลพื้นฐาน' => [
             ['จัดการผู้ใช้', 'admin/users.php', 'bi-people'],
@@ -75,6 +78,7 @@ $menus = [
             ['โครงการสอน/แผนการสอน', 'supervisor/lesson_plans.php', 'bi-journal-text'],
             ['ข้อตกลง PA', 'supervisor/pa.php', 'bi-clipboard-check'],
             ['วิจัยในชั้นเรียน', 'supervisor/research.php', 'bi-search'],
+            ['ประเมินแผนการจัดการเรียนรู้', 'review/plan_evaluations.php', 'bi-clipboard-data'],
         ],
         'นิเทศการสอน' => [
             ['1. นิเทศโดยหัวหน้าแผนก', 'supervisor/supervision.php', 'bi-person-video3'],
@@ -87,10 +91,12 @@ $menus = [
             ['ส่ง PA', 'teacher/pa.php', 'bi-upload'],
             ['ส่งวิจัย', 'teacher/research.php', 'bi-upload'],
             ['ผลการนิเทศของฉัน', 'teacher/supervision.php', 'bi-person-badge'],
+            ['ผลประเมินแผนของฉัน', 'teacher/plan_evaluations.php', 'bi-clipboard-data'],
         ],
         'รายงาน' => [
             ['รายงานแผนก', 'reports/index.php', 'bi-bar-chart-line'],
             ['เกณฑ์การส่งรายภาคเรียน', 'reports/teaching_compliance.php', 'bi-clipboard2-check'],
+            ['รายงานผลประเมินแผนฯ (แผนก)', 'reports/plan_eval_summary.php', 'bi-graph-up'],
         ],
     ],
     'teacher' => [
@@ -105,6 +111,7 @@ $menus = [
         ],
         'นิเทศการสอน' => [
             ['ผลการนิเทศของฉัน', 'teacher/supervision.php', 'bi-person-video3'],
+            ['ผลประเมินแผนของฉัน', 'teacher/plan_evaluations.php', 'bi-clipboard-data'],
         ],
         'ข้อมูลทั่วไป' => [
             ['ปฏิทินส่งงาน', 'public/calendar.php', 'bi-calendar-event'],
@@ -119,6 +126,7 @@ $menus = [
             ['รายงานการนิเทศ (พิจารณา)', 'reports/supervision_reports.php', 'bi-file-earmark-check'],
             ['รายงานผลแยกงาน', 'reports/index.php', 'bi-bar-chart-line'],
             ['เกณฑ์การส่งรายภาคเรียน', 'reports/teaching_compliance.php', 'bi-clipboard2-check'],
+            ['รายงานผลประเมินแผนฯ', 'reports/plan_eval_summary.php', 'bi-graph-up'],
         ],
         'ข้อมูลทั่วไป' => [
             ['ปฏิทินส่งงาน', 'public/calendar.php', 'bi-calendar-event'],
@@ -142,11 +150,26 @@ if ($user['role'] === 'teacher' && ($reviewTypes = designated_review_types($user
             [(int)$user['id']]
         );
     }
+    // หัวหน้างานพัฒนาหลักสูตรฯ ประเมินแผนได้ทุกแผนก / ผู้ตรวจแผนการสอนตามตำแหน่งดูรายงานผลประเมินแผนได้
+    if (is_curriculum_head($user)) {
+        $reviewMenu[] = ['ประเมินแผนการจัดการเรียนรู้', 'review/plan_evaluations.php', 'bi-clipboard-data'];
+    }
+    if (in_array('lesson_plan', $reviewTypes, true)) {
+        $reviewMenu[] = ['รายงานผลประเมินแผนฯ', 'reports/plan_eval_summary.php', 'bi-graph-up'];
+    }
     $roleMenu = array_slice($roleMenu, 0, 1, true) + ['ตรวจงาน (ตามตำแหน่ง)' => $reviewMenu] + array_slice($roleMenu, 1, null, true);
 }
-// รายงานครูที่ปรึกษา: ครูที่ได้รับมอบหมายกลุ่มที่ปรึกษา / ผู้ตรวจ (admin + งานครูที่ปรึกษาฯ ตามตำแหน่ง) / ผู้ดูสรุป
-if (in_array($user['role'], teacher_roles(), true) && is_advisor_teacher((int)$user['id'])) {
-    $advisorMenu = [['รายงานการพบนักเรียน', 'teacher/advisor_reports.php', 'bi-people'], ['รายงานการเยี่ยมบ้าน', 'teacher/home_visits.php', 'bi-house-heart']];
+// ประเมินแผนการจัดการเรียนรู้: จำนวนแผนที่รอประเมิน (ภาคเรียนปัจจุบัน) / ผลประเมินที่ครูยังไม่รับทราบ
+if (is_plan_evaluator($user)) {
+    $badgeCounts['review/plan_evaluations.php'] = plan_eval_pending_count($user);
+}
+if (in_array($user['role'], teacher_roles(), true)) {
+    $badgeCounts['teacher/plan_evaluations.php'] = plan_eval_unack_count((int)$user['id']);
+}
+// รายงานครูที่ปรึกษา: ครูทุกคนเห็นเมนูรายงาน (ครูที่ยังไม่มีกลุ่มที่ปรึกษา หน้ารายงานจะแจ้งให้ติดต่องานครูที่ปรึกษาฯ)
+// / ผู้ตรวจ (admin + งานครูที่ปรึกษาฯ ตามตำแหน่ง) / ผู้ดูสรุป
+if (in_array($user['role'], teacher_roles(), true)) {
+    $advisorMenu = [['รายงานกิจกรรมโฮมรูม', 'teacher/advisor_reports.php', 'bi-people'], ['รายงานการเยี่ยมบ้าน', 'teacher/home_visits.php', 'bi-house-heart']];
     $badgeCounts['teacher/home_visits.php'] = (int)db_value(
         "SELECT COUNT(*) FROM home_visits WHERE teacher_id = ? AND status = 'revision'",
         'i',
@@ -165,17 +188,31 @@ if (can_manage_advisor($user)) {
     $advisorMenu = [$user['role'] === 'admin' ? 'งานครูที่ปรึกษา' : 'งานครูที่ปรึกษา (ตามตำแหน่ง)' => [
         ['รายงานกิจกรรมโฮมรูม', 'review/advisor_reports.php', 'bi-clipboard-check'],
         ['กลุ่มที่ปรึกษา / วันงดพบ', 'review/advisor_groups.php', 'bi-diagram-3'],
-        ['สรุปรายงานครูที่ปรึกษา', 'reports/advisor_summary.php', 'bi-bar-chart-line'],
+        ['สรุปรายงานกิจกรรมโฮมรูม', 'reports/advisor_summary.php', 'bi-bar-chart-line'],
         ['รายงานการเยี่ยมบ้าน', 'review/home_visits.php', 'bi-house-check'],
-        ['สรุปการเยี่ยมบ้าน', 'reports/home_visit_summary.php', 'bi-house-heart'],
+        ['สรุปรายงานการเยี่ยมบ้าน', 'reports/home_visit_summary.php', 'bi-house-heart'],
     ]];
+    // หัวหน้างาน/เจ้าหน้าที่ที่เป็นครูที่ปรึกษาด้วย: วางเมนูส่งรายงานของตนเองต่อจากเมนูงานครูที่ปรึกษา
+    // และตั้งชื่อกลุ่มให้ต่างจากเมนูตรวจรายงาน (ชื่อเมนูซ้ำกัน)
+    if (isset($roleMenu['ครูที่ปรึกษา'])) {
+        $advisorMenu['ครูที่ปรึกษา (รายงานของฉัน)'] = $roleMenu['ครูที่ปรึกษา'];
+        unset($roleMenu['ครูที่ปรึกษา']);
+    }
     // วางต่อจากกลุ่ม "นิเทศการสอน" (admin) หรือต่อจากแดชบอร์ด
     $advisorPos = array_search('นิเทศการสอน', array_keys($roleMenu), true);
     $advisorPos = ($user['role'] === 'admin' && $advisorPos !== false) ? $advisorPos + 1 : 1;
     $roleMenu = array_slice($roleMenu, 0, $advisorPos, true) + $advisorMenu + array_slice($roleMenu, $advisorPos, null, true);
 } elseif (in_array($user['role'], ['executive', 'supervisor'], true)) {
-    $roleMenu['รายงาน'][] = ['สรุปรายงานครูที่ปรึกษา', 'reports/advisor_summary.php', 'bi-people'];
-    $roleMenu['รายงาน'][] = ['สรุปการเยี่ยมบ้าน', 'reports/home_visit_summary.php', 'bi-house-heart'];
+    $roleMenu['รายงาน'][] = ['สรุปรายงานกิจกรรมโฮมรูม', 'reports/advisor_summary.php', 'bi-people'];
+    $roleMenu['รายงาน'][] = ['สรุปรายงานการเยี่ยมบ้าน', 'reports/home_visit_summary.php', 'bi-house-heart'];
+}
+// เจ้าหน้าที่งานครูที่ปรึกษาและแนะแนว: เห็นเฉพาะเมนูงานครูที่ปรึกษา (+ เมนูส่งรายงานของตนเองถ้าเป็นครูที่ปรึกษาด้วย)
+if (is_advisor_staff_only($user)) {
+    $staffMenu = ['งานครูที่ปรึกษา' => $roleMenu['งานครูที่ปรึกษา (ตามตำแหน่ง)'] ?? []];
+    if (is_advisor_teacher((int)$user['id']) && isset($roleMenu['ครูที่ปรึกษา (รายงานของฉัน)'])) {
+        $staffMenu['ครูที่ปรึกษา (รายงานของฉัน)'] = $roleMenu['ครูที่ปรึกษา (รายงานของฉัน)'];
+    }
+    $roleMenu = $staffMenu;
 }
 // path ของหน้าปัจจุบันเทียบกับ root ของระบบ เช่น admin/users.php
 $currentPath = ltrim(substr(str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? ''), strlen(BASE_URL)), '/');

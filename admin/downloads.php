@@ -24,7 +24,8 @@ if (is_post()) {
         if ($title === '') {
             $errors['title'] = 'กรุณากรอกชื่อเอกสาร';
         }
-        if (!isset(download_categories()[$cat])) {
+        // เลือกได้เฉพาะหมวดที่เปิดใช้งาน หรือหมวดเดิมของเอกสารที่กำลังแก้ไข
+        if (!isset(download_categories(true)[$cat]) && !($old && $old['category'] === $cat && isset(download_categories()[$cat]))) {
             $errors['category'] = 'กรุณาเลือกหมวด';
         }
         $hasFile = !empty($_FILES['file']) && $_FILES['file']['error'] !== UPLOAD_ERR_NO_FILE;
@@ -78,13 +79,50 @@ if (is_post()) {
 $editId = get_int('edit') ?: (int)post('id');
 $editing = $editId ? db_one('SELECT * FROM downloads WHERE id = ?', 'i', [$editId]) : null;
 $showForm = $editing || get('new') === '1' || $errors;
-$rows = db_all('SELECT * FROM downloads ORDER BY category, title');
+// ค้นหา/กรอง: คำค้น (ชื่อ คำอธิบาย ชื่อไฟล์) · หมวด · สถานะ
+$fq = mb_substr(trim(get('q')), 0, 100);
+$fCat = get('cat');
+$fStatus = get('status');
+$where = [];
+$types = '';
+$params = [];
+if ($fq !== '') {
+    $like = '%' . addcslashes($fq, '%_\\') . '%';
+    $where[] = '(d.title LIKE ? OR d.description LIKE ? OR d.original_name LIKE ?)';
+    $types .= 'sss';
+    array_push($params, $like, $like, $like);
+}
+if ($fCat !== '' && isset(download_categories()[$fCat])) {
+    $where[] = 'd.category = ?';
+    $types .= 's';
+    $params[] = $fCat;
+} else {
+    $fCat = '';
+}
+if (in_array($fStatus, ['1', '0'], true)) {
+    $where[] = 'd.is_active = ' . (int)$fStatus;
+} else {
+    $fStatus = '';
+}
+$rows = db_all(
+    'SELECT d.* FROM downloads d LEFT JOIN download_categories c ON c.code = d.category'
+    . ($where ? ' WHERE ' . implode(' AND ', $where) : '') . ' ORDER BY c.sort_order, d.title',
+    $types,
+    $params
+);
+$filtering = $fq !== '' || $fCat !== '' || $fStatus !== '';
 $fv = fn(string $k, string $d = '') => is_post() ? post($k) : (string)($editing[$k] ?? $d);
 
 $pageTitle = 'เอกสารดาวน์โหลด';
 $pageIcon = 'bi-cloud-download';
 $breadcrumbs = ['เอกสารดาวน์โหลด' => null];
-$pageActions = $showForm ? '' : '<a href="?new=1" class="btn btn-accent"><i class="bi bi-plus-lg me-1"></i>เพิ่มเอกสาร</a>';
+// ตัวเลือกหมวด: หมวดที่เปิดใช้งาน + หมวดเดิมของเอกสารที่กำลังแก้ไข (กรณีหมวดนั้นถูกปิดไปแล้ว)
+$catOptions = download_categories(true);
+if ($editing && !isset($catOptions[$editing['category']]) && isset(download_categories()[$editing['category']])) {
+    $catOptions[$editing['category']] = download_categories()[$editing['category']] . ' (ปิดใช้งาน)';
+}
+$pageActions = '<a href="' . e(url('admin/download_categories.php')) . '" class="btn btn-outline-primary"><i class="bi bi-tags me-1"></i>หมวดหมู่</a>'
+    . ($showForm ? '' : ' <a href="?new=1" class="btn btn-accent"><i class="bi bi-plus-lg me-1"></i>เพิ่มเอกสาร</a>');
 require APP_ROOT . '/includes/header.php';
 ?>
 <?php if ($showForm): ?>
@@ -103,8 +141,9 @@ require APP_ROOT . '/includes/header.php';
                     <div class="col-md-4">
                         <label class="form-label" for="category">หมวด *</label>
                         <select class="form-select" name="category" id="category">
-                            <?php foreach (download_categories() as $k => $v): ?><option value="<?= e($k) ?>" <?= $fv('category', 'lesson_plan') === $k ? 'selected' : '' ?>><?= e($v) ?></option><?php endforeach; ?>
+                            <?php foreach ($catOptions as $k => $v): ?><option value="<?= e($k) ?>" <?= $fv('category', (string)array_key_first($catOptions)) === (string)$k ? 'selected' : '' ?>><?= e($v) ?></option><?php endforeach; ?>
                         </select>
+                        <?php if (isset($errors['category'])): ?><div class="invalid-feedback d-block"><?= e($errors['category']) ?></div><?php endif; ?>
                     </div>
                     <div class="col-12">
                         <label class="form-label" for="description">คำอธิบาย</label>
@@ -132,6 +171,34 @@ require APP_ROOT . '/includes/header.php';
 <?php endif; ?>
 
 <div class="card">
+    <div class="card-header">
+        <form method="get" class="row g-2 align-items-center" role="search">
+            <div class="col-md-6">
+                <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                    <input type="search" class="form-control" name="q" value="<?= e($fq) ?>" placeholder="ค้นหาชื่อเอกสาร คำอธิบาย หรือชื่อไฟล์" aria-label="ค้นหาเอกสาร">
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <select name="cat" class="form-select" aria-label="หมวด" onchange="this.form.submit()">
+                    <option value="">ทุกหมวด</option>
+                    <?php foreach (download_categories() as $k => $v): ?><option value="<?= e($k) ?>" <?= $fCat === (string)$k ? 'selected' : '' ?>><?= e($v) ?></option><?php endforeach; ?>
+                </select>
+            </div>
+            <div class="col-6 col-md-2">
+                <select name="status" class="form-select" aria-label="สถานะ" onchange="this.form.submit()">
+                    <option value="">ทุกสถานะ</option>
+                    <option value="1" <?= $fStatus === '1' ? 'selected' : '' ?>>เผยแพร่</option>
+                    <option value="0" <?= $fStatus === '0' ? 'selected' : '' ?>>ซ่อน</option>
+                </select>
+            </div>
+            <div class="col-md-1 d-flex gap-1">
+                <button class="btn btn-primary flex-fill" title="ค้นหา"><i class="bi bi-search"></i></button>
+                <?php if ($filtering): ?><a href="<?= e(url('admin/downloads.php')) ?>" class="btn btn-outline-secondary" title="ล้างการค้นหา"><i class="bi bi-x-lg"></i></a><?php endif; ?>
+            </div>
+        </form>
+        <?php if ($filtering): ?><div class="small text-muted mt-2">พบ <?= count($rows) ?> รายการ</div><?php endif; ?>
+    </div>
     <div class="card-body">
         <div class="table-responsive">
             <table class="table table-hover datatable" data-order="[]">

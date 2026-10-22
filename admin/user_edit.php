@@ -66,7 +66,9 @@ if (is_post()) {
     }
     if (!isset(role_labels()[$data['role']])) {
         $errors['role'] = 'สิทธิ์ไม่ถูกต้อง';
-    } elseif (in_array($data['role'], ['teacher', 'supervisor'], true) && !$data['department_id']) {
+    } elseif (in_array($data['role'], ['teacher', 'supervisor'], true) && !$data['department_id']
+        && !($data['role'] === 'teacher' && normalize_position($data['position']) === ADVISOR_STAFF_ONLY_POSITION)) {
+        // เจ้าหน้าที่งานครูที่ปรึกษาและแนะแนว ไม่สังกัดแผนกวิชาได้
         $errors['department_id'] = 'ครูและหัวหน้าแผนกต้องระบุแผนกวิชา';
     }
     if (!isset(user_status_labels()[$data['status']])) {
