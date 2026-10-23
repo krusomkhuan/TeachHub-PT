@@ -90,7 +90,7 @@ function report_status_badge(array $r): string
 function can_view_report(array $user, array $r): bool
 {
     $uid = (int)$user['id'];
-    if ($user['role'] === 'admin' || (int)$r['author_id'] === $uid) {
+    if (admin_can($user, 'supervision_reports') || (int)$r['author_id'] === $uid) {
         return true;
     }
     if ($user['role'] === 'supervisor' && (int)$user['department_id'] === (int)$r['department_id']) {

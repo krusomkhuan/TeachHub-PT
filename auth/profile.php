@@ -118,7 +118,7 @@ require APP_ROOT . '/includes/header.php';
                 <img src="<?= e(avatar_url($user)) ?>" alt="รูปโปรไฟล์" class="avatar-lg mb-3" id="avatarPreview">
                 <h5 class="fw-bold mb-0"><?= e(full_name($user)) ?></h5>
                 <div class="text-muted"><?= e($user['position']) ?></div>
-                <span class="badge bg-primary-th mt-2"><?= e(role_label($user['role'])) ?></span>
+                <span class="badge bg-primary-th mt-2"><?= e(user_role_label($user)) ?></span>
             </div>
             <ul class="list-group list-group-flush text-start small">
                 <li class="list-group-item d-flex"><span class="text-muted">ชื่อผู้ใช้</span><span class="ms-auto fw-semibold"><?= e($user['username']) ?></span></li>

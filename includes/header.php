@@ -68,7 +68,7 @@ $headerAy = current_academic_year();
                         <img src="<?= e(avatar_url($user)) ?>" alt="" class="avatar-sm me-2">
                         <span class="d-none d-md-inline lh-sm">
                             <span class="fw-semibold d-block"><?= e(full_name($user)) ?></span>
-                            <small class="text-muted"><?= e(role_label($user['role'])) ?></small>
+                            <small class="text-muted"><?= e(user_role_label($user)) ?></small>
                         </span>
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end shadow-sm">

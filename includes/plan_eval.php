@@ -28,7 +28,7 @@ function is_curriculum_head(array $user): bool
 /** ประเมินแผนได้ทุกแผนก (admin + หัวหน้างานพัฒนาหลักสูตรฯ) */
 function plan_eval_scope_all(array $user): bool
 {
-    return $user['role'] === 'admin' || is_curriculum_head($user);
+    return admin_can($user, 'plan_eval') || is_curriculum_head($user);
 }
 
 /** เป็นผู้ประเมินแผน (ทุกแผนก หรือหัวหน้าแผนกที่มีแผนกสังกัด) */

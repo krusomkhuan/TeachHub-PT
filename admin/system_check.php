@@ -69,6 +69,9 @@ $hvOldUnique = (bool)db_value("SELECT 1 FROM information_schema.STATISTICS WHERE
                                AND INDEX_NAME = 'uq_home_visit_student_year' LIMIT 1");
 $add('ฐานข้อมูล', $hvOldUnique ? 'fail' : 'ok', 'โครงสร้างการเยี่ยมบ้าน (v1.16)',
     $hvOldUnique ? 'ยังไม่ได้นำเข้า update_v1.16.sql — บันทึกเยี่ยมบ้านนักเรียนคนเดิมครั้งที่ 2 จะไม่สำเร็จ' : 'เยี่ยมบ้านนักเรียนคนเดิมได้หลายครั้งต่อปี');
+// v1.17: สิทธิ์เจ้าหน้าที่ดูแลระบบ — คอลัมน์ users.admin_permissions
+$add('ฐานข้อมูล', admin_perm_column_ready() ? 'ok' : 'fail', 'สิทธิ์เจ้าหน้าที่ดูแลระบบ (v1.17)',
+    admin_perm_column_ready() ? 'กำหนดสิทธิ์รายเมนูให้เจ้าหน้าที่ดูแลระบบได้' : 'ยังไม่ได้นำเข้า update_v1.17.sql — ยังกำหนดสิทธิ์เจ้าหน้าที่ดูแลระบบไม่ได้');
 $add('ข้อมูลพื้นฐาน', report_chain_ready() ? 'ok' : 'warn', 'ผู้พิจารณารายงานการนิเทศ (3 ขั้น)',
     report_chain_ready() ? implode(' → ', array_map(fn($s) => $s['title'] . ' (' . $s['name'] . ')', report_approval_chain()))
         : 'ยังกำหนดไม่ครบ — หัวหน้าแผนกจะเสนอรายงานไม่ได้ (ตั้งค่าระบบ → ผู้พิจารณารายงานการนิเทศ)');
@@ -119,7 +122,9 @@ foreach (db_all("SELECT username, password_hash FROM users WHERE status = 'activ
 $add('ความปลอดภัย', $weak ? 'fail' : 'ok', 'รหัสผ่านเริ่มต้น/บัญชีทดลอง',
     $weak ? 'บัญชีที่ยังใช้รหัสผ่านเริ่มต้น: ' . implode(', ', $weak) . ' — เปลี่ยนรหัสหรือระงับบัญชีทดลองก่อนเปิดใช้งานจริง' : 'ไม่พบรหัสผ่านเริ่มต้น');
 $activeAdmins = (int)db_value("SELECT COUNT(*) FROM users WHERE role = 'admin' AND status = 'active'");
-$add('ความปลอดภัย', $activeAdmins >= 1 ? 'ok' : 'fail', 'ผู้ดูแลระบบที่ใช้งานได้', $activeAdmins . ' บัญชี');
+$fullAdmins = full_admin_count();
+$add('ความปลอดภัย', $fullAdmins >= 1 ? 'ok' : 'fail', 'ผู้ดูแลระบบที่ใช้งานได้',
+    'เต็มสิทธิ์ ' . $fullAdmins . ' บัญชี · เจ้าหน้าที่ดูแลระบบ (กำหนดสิทธิ์) ' . ($activeAdmins - $fullAdmins) . ' บัญชี');
 
 // ---------- 5) ข้อมูลพื้นฐาน ----------
 $ay = current_academic_year();

@@ -413,6 +413,12 @@ function is_executive_position(string $position): bool
     return mb_strpos($position, 'รองผู้อำนวยการ') === 0 || mb_strpos($position, 'ผู้อำนวยการ') === 0;
 }
 
+/** ตำแหน่งเจ้าหน้าที่งาน (เช่น เจ้าหน้าที่งานครูที่ปรึกษาและแนะแนว) — ไม่สังกัดแผนกวิชาได้ */
+function is_unit_staff_position(string $position): bool
+{
+    return mb_strpos(trim(preg_replace('/\s+/u', ' ', $position)), 'เจ้าหน้าที่งาน') === 0;
+}
+
 /** วิทยฐานะ (สายครู + สายผู้บริหาร เช่น ผู้อำนวยการ/รองผู้อำนวยการ) */
 function academic_standing_options(): array
 {

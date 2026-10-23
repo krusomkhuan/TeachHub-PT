@@ -69,7 +69,7 @@ function schedule_fetch(int $id): ?array
  */
 function can_view_schedule(array $user, array $sc): bool
 {
-    if (in_array($user['role'], ['admin', 'executive'], true)) {
+    if (admin_can($user, 'supervision') || $user['role'] === 'executive') {
         return true;
     }
     $uid = (int)$user['id'];
@@ -90,7 +90,7 @@ function can_record_schedule(array $user, array $sc): bool
     if ($sc['status'] === 'cancelled' || !empty($sc['acknowledged_at'])) {
         return false;
     }
-    return $user['role'] === 'admin' || (int)$sc['supervisor_id'] === (int)$user['id'];
+    return admin_can($user, 'supervision') || (int)$sc['supervisor_id'] === (int)$user['id'];
 }
 
 /**
@@ -99,7 +99,7 @@ function can_record_schedule(array $user, array $sc): bool
  */
 function can_manage_schedule(array $user, array $sc): bool
 {
-    if ($user['role'] === 'admin') {
+    if (admin_can($user, 'supervision')) {
         return true;
     }
     return $user['role'] === 'supervisor'

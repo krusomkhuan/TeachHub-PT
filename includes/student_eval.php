@@ -111,7 +111,7 @@ function student_eval_state_badge(array $s): string
 /** ผู้ใช้ดูผลการประเมินนี้ได้หรือไม่ */
 function can_view_student_eval(array $user, array $s): bool
 {
-    if (in_array($user['role'], ['admin', 'executive'], true)) {
+    if (admin_can($user, 'student_eval') || $user['role'] === 'executive') {
         return true;
     }
     if ((int)$s['teacher_id'] === (int)$user['id']) {
@@ -127,7 +127,7 @@ function can_view_student_eval(array $user, array $s): bool
  */
 function can_see_student_eval_qr(array $user, array $s): bool
 {
-    return $user['role'] === 'admin' || (int)$s['teacher_id'] === (int)$user['id'];
+    return admin_can($user, 'student_eval') || (int)$s['teacher_id'] === (int)$user['id'];
 }
 
 /**

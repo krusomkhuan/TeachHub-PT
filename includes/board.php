@@ -46,7 +46,7 @@ function board_status_badge(string $status): string
 /** ผู้ดูแลกระดาน (ผู้ดูแลระบบ) */
 function board_can_moderate(array $user): bool
 {
-    return $user['role'] === 'admin';
+    return admin_can($user, 'board');
 }
 
 /** ข้อความในกระทู้ (escape ทุกตัวอักษร + ขึ้นบรรทัด) */

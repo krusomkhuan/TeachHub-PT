@@ -6,6 +6,9 @@
 require_once __DIR__ . '/../config/config.php';
 
 $user = require_role('admin');
+// เจ้าหน้าที่ดูแลระบบ: ส่วนข้อมูลผู้ใช้/บันทึกการใช้งาน แสดงเฉพาะเมื่อได้รับสิทธิ์
+$canUsers = admin_can($user, 'users');
+$canLogs = admin_can($user, 'logs');
 // สำรองข้อมูลอัตโนมัติวันละครั้ง (ถ้าเปิดใช้ในหน้า สำรอง / กู้คืนข้อมูล)
 backup_auto_maybe();
 $ay = current_academic_year();
@@ -39,7 +42,7 @@ foreach ($rounds as $r) {
 $deptStats = stat_department_submission($ayId);
 
 // ---------- Log ล่าสุด ----------
-$logs = db_all(
+$logs = !$canLogs ? [] : db_all(
     "SELECT l.action, l.detail, l.ip_address, l.created_at, u.username
      FROM activity_logs l LEFT JOIN users u ON u.id = l.user_id
      ORDER BY l.id DESC LIMIT 8"
@@ -47,18 +50,19 @@ $logs = db_all(
 
 $pageTitle = 'แดชบอร์ดผู้ดูแลระบบ';
 $pageIcon = 'bi-speedometer2';
-$pageActions = '<a href="' . e(url('admin/users.php')) . '" class="btn btn-outline-primary btn-sm"><i class="bi bi-people me-1"></i>จัดการผู้ใช้</a>';
+$pageActions = $canUsers ? '<a href="' . e(url('admin/users.php')) . '" class="btn btn-outline-primary btn-sm"><i class="bi bi-people me-1"></i>จัดการผู้ใช้</a>' : '';
 require APP_ROOT . '/includes/header.php';
 ?>
 <?php require APP_ROOT . '/includes/partials/report_alert.php'; ?>
 
 <div class="row g-3 mb-4">
     <div class="col-sm-6 col-xl">
-        <a href="<?= e(url('admin/users.php')) ?>" class="stat-card">
+        <a href="<?= $canUsers ? e(url('admin/users.php')) : '#' ?>" class="stat-card">
             <div class="stat-icon ic-navy"><i class="bi bi-people"></i></div>
             <div><div class="stat-value"><?= $teacherCount ?></div><div class="stat-label">ครูผู้สอนที่ใช้งาน</div></div>
         </a>
     </div>
+    <?php if ($canUsers): ?>
     <div class="col-sm-6 col-xl">
         <a href="<?= e(url('admin/users.php?status=pending')) ?>" class="stat-card">
             <div class="stat-icon ic-red"><i class="bi bi-person-exclamation"></i></div>
@@ -66,6 +70,7 @@ require APP_ROOT . '/includes/header.php';
                 <div class="stat-sub">คำขอรีเซ็ตรหัส <?= $resetRequests ?></div></div>
         </a>
     </div>
+    <?php endif; ?>
     <div class="col-sm-6 col-xl">
         <div class="stat-card">
             <div class="stat-icon ic-yellow"><i class="bi bi-hourglass-split"></i></div>
@@ -87,7 +92,7 @@ require APP_ROOT . '/includes/header.php';
     </div>
 </div>
 
-<?php if ($pendingUsers): ?>
+<?php if ($pendingUsers && $canUsers): ?>
     <div class="card mb-4 border-start border-4 border-danger">
         <div class="card-header d-flex align-items-center">
             <i class="bi bi-person-plus me-2 text-danger"></i>สมาชิกใหม่รออนุมัติ
@@ -139,7 +144,7 @@ require APP_ROOT . '/includes/header.php';
 </div>
 
 <div class="row g-4">
-    <div class="col-xl-7">
+    <div class="<?= $canLogs ? 'col-xl-7' : 'col-12' ?>">
         <div class="card h-100">
             <div class="card-header"><i class="bi bi-hourglass-split me-2"></i>ความคืบหน้ารอบที่เปิดรับ</div>
             <div class="table-responsive">
@@ -171,6 +176,7 @@ require APP_ROOT . '/includes/header.php';
             </div>
         </div>
     </div>
+    <?php if ($canLogs): ?>
     <div class="col-xl-5">
         <div class="card h-100">
             <div class="card-header d-flex"><i class="bi bi-clock-history me-2"></i>การใช้งานล่าสุด
@@ -189,6 +195,7 @@ require APP_ROOT . '/includes/header.php';
             </ul>
         </div>
     </div>
+    <?php endif; ?>
 </div>
 
 <?php

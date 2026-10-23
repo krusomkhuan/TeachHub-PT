@@ -151,11 +151,24 @@ function submission_upload(string $type, string $field = 'file'): array
     return handle_upload($_FILES[$field], submission_subdir($type), allowed_upload_extensions(), max_upload_bytes());
 }
 
+/** รหัสสิทธิ์เจ้าหน้าที่ดูแลระบบที่ใช้ตรวจงานประเภทนี้ (includes/admin_perm.php) */
+function submission_admin_perm(string $type): string
+{
+    return ['lesson_plan' => 'lesson_plans', 'pa' => 'pa', 'research' => 'research'][$type] ?? $type;
+}
+
 /**
  * ผู้ใช้ดูงานนี้ได้หรือไม่
  */
 function can_view_submission(array $user, array $sub): bool
 {
+    // เจ้าหน้าที่ดูแลระบบ: ดูได้เฉพาะงานประเภทที่ได้รับสิทธิ์ตรวจ (แผนฯ ดูได้ด้วยสิทธิ์ประเมินแผน) หรืองานของตนเอง
+    if (is_limited_admin($user)) {
+        $type = $sub['_type'] ?? '';
+        return (int)$sub['teacher_id'] === (int)$user['id']
+            || ($type !== '' && admin_can($user, submission_admin_perm($type)))
+            || ($type === 'lesson_plan' && admin_can($user, 'plan_eval'));
+    }
     if (isset($sub['_type']) && is_designated_reviewer($user, $sub['_type'])) {
         return true;
     }
@@ -241,7 +254,7 @@ function designated_reviewers(string $type): array
 function can_review_submission(array $user, array $sub): bool
 {
     if ($user['role'] === 'admin') {
-        return true;
+        return is_full_admin($user) || (isset($sub['_type']) && admin_can($user, submission_admin_perm($sub['_type'])));
     }
     if (isset($sub['_type']) && is_designated_reviewer($user, $sub['_type'])) {
         return (int)$sub['teacher_id'] !== (int)$user['id'];

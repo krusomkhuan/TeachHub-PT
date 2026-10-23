@@ -2,6 +2,7 @@
 /**
  * ไฟล์: admin/user_edit.php
  * เพิ่ม/แก้ไขผู้ใช้ และกำหนดสิทธิ์ (role) / สถานะ — เฉพาะ admin
+ * กำหนดสิทธิ์เจ้าหน้าที่ดูแลระบบ (users.admin_permissions) ได้เฉพาะผู้ดูแลระบบเต็มสิทธิ์
  *   ?id=xx  = แก้ไข,  ไม่มี id = เพิ่มผู้ใช้ใหม่
  */
 require_once __DIR__ . '/../config/config.php';
@@ -19,6 +20,15 @@ if ($id > 0) {
 }
 $isNew = $editing === null;
 $isSelf = !$isNew && (int)$editing['id'] === $myId;
+// เจ้าหน้าที่ดูแลระบบ (สิทธิ์จัดการผู้ใช้): แก้ไขบัญชีผู้ดูแลระบบ/เจ้าหน้าที่ดูแลระบบไม่ได้ รวมถึงบัญชีของตนเอง (แก้ข้อมูลตนเองที่หน้าโปรไฟล์)
+$isFullEditor = is_full_admin($user);
+if (!$isFullEditor && !$isNew && $editing['role'] === 'admin') {
+    log_activity('access_denied', 'เจ้าหน้าที่ดูแลระบบพยายามแก้ไขบัญชีผู้ดูแลระบบ ' . $editing['username']);
+    abort_page(403, 'ไม่มีสิทธิ์แก้ไขบัญชีนี้', 'เจ้าหน้าที่ดูแลระบบแก้ไขบัญชีผู้ดูแลระบบไม่ได้ — แก้ข้อมูลของตนเองได้ที่หน้าโปรไฟล์');
+}
+$permReady = admin_perm_column_ready();
+$permGroups = admin_permission_groups();
+$permKeys = array_keys(admin_permission_list());
 $departments = db_all('SELECT id, name FROM departments WHERE is_active = 1 OR id = ? ORDER BY name', 'i', [(int)($editing['department_id'] ?? 0)]);
 $errors = [];
 
@@ -38,6 +48,15 @@ if (is_post()) {
         'role'              => post('role'),
         'status'            => post('status'),
     ];
+    // สิทธิ์เจ้าหน้าที่งานตามตำแหน่ง (ค่า "pos:ลำดับ" จากช่องสิทธิ์) = role ครูผู้สอน + ตำแหน่งนั้น
+    $staffRoles = advisor_staff_positions();
+    if (preg_match('/^pos:(\d+)$/', $data['role'], $m) && isset($staffRoles[(int)$m[1]])) {
+        $data['role'] = 'teacher';
+        $data['position'] = $staffRoles[(int)$m[1]];
+    } elseif (in_array(normalize_position($data['position']), $staffRoles, true)) {
+        // เลือกสิทธิ์หลักแทนสิทธิ์เจ้าหน้าที่งาน = ยกเลิกตำแหน่งงานครูที่ปรึกษาฯ (สิทธิ์ตรวจรายงาน)
+        $data['position'] = $data['role'] === 'teacher' ? 'ครู' : '';
+    }
     // ป้องกัน admin เปลี่ยนสิทธิ์/สถานะของตนเองจนเข้าระบบไม่ได้
     if ($isSelf) {
         $data['role'] = $editing['role'];
@@ -45,6 +64,19 @@ if (is_post()) {
     }
     $password = (string)($_POST['password'] ?? '');
     $mustChange = isset($_POST['must_change_password']) ? 1 : 0;
+
+    // สิทธิ์ผู้ดูแลระบบ: null = เต็มสิทธิ์ / JSON = เจ้าหน้าที่ดูแลระบบ (กำหนดได้เฉพาะผู้ดูแลระบบเต็มสิทธิ์ และไม่ใช่บัญชีตนเอง)
+    $oldPerms = $isNew ? null : ($editing['admin_permissions'] ?? null);
+    $adminPerms = $oldPerms;
+    if ($data['role'] !== 'admin') {
+        $adminPerms = null;
+    } elseif ($isFullEditor && !$isSelf && $permReady) {
+        $adminPerms = null;
+        if (post('admin_type') === 'limited') {
+            $picked = array_filter((array)($_POST['perms'] ?? []), 'is_string');
+            $adminPerms = json_encode(array_values(array_intersect($permKeys, $picked)));
+        }
+    }
 
     // ---------- ตรวจสอบ ----------
     if (!valid_username($data['username'])) {
@@ -66,10 +98,12 @@ if (is_post()) {
     }
     if (!isset(role_labels()[$data['role']])) {
         $errors['role'] = 'สิทธิ์ไม่ถูกต้อง';
+    } elseif (!$isFullEditor && $data['role'] === 'admin') {
+        $errors['role'] = 'เจ้าหน้าที่ดูแลระบบกำหนดสิทธิ์ผู้ดูแลระบบให้ผู้อื่นไม่ได้';
     } elseif (in_array($data['role'], ['teacher', 'supervisor'], true) && !$data['department_id']
-        && !($data['role'] === 'teacher' && normalize_position($data['position']) === ADVISOR_STAFF_ONLY_POSITION)) {
-        // เจ้าหน้าที่งานครูที่ปรึกษาและแนะแนว ไม่สังกัดแผนกวิชาได้
-        $errors['department_id'] = 'ครูและหัวหน้าแผนกต้องระบุแผนกวิชา';
+        && !($data['role'] === 'teacher' && is_unit_staff_position($data['position']))) {
+        // ตำแหน่งเจ้าหน้าที่งาน (เช่น เจ้าหน้าที่งานครูที่ปรึกษาและแนะแนว) ไม่สังกัดแผนกวิชาได้
+        $errors['department_id'] = 'ครูและหัวหน้าแผนกต้องระบุแผนกวิชา (ยกเว้นตำแหน่งเจ้าหน้าที่งาน)';
     }
     if (!isset(user_status_labels()[$data['status']])) {
         $errors['status'] = 'สถานะไม่ถูกต้อง';
@@ -90,12 +124,11 @@ if (is_post()) {
             $errors['password'] = $msg;
         }
     }
-    // ห้ามลดสิทธิ์/ระงับ admin คนสุดท้าย
-    if (!$isNew && $editing['role'] === 'admin' && ($data['role'] !== 'admin' || $data['status'] !== 'active')) {
-        $activeAdmins = (int)db_value("SELECT COUNT(*) FROM users WHERE role = 'admin' AND status = 'active' AND id <> ?", 'i', [$id]);
-        if ($activeAdmins < 1) {
-            $errors['role'] = 'ต้องมีผู้ดูแลระบบที่ใช้งานได้อย่างน้อย 1 คน';
-        }
+    // ห้ามลดสิทธิ์/ระงับ/จำกัดสิทธิ์ ผู้ดูแลระบบเต็มสิทธิ์คนสุดท้าย
+    if (!$isNew && is_full_admin($editing)
+        && ($data['role'] !== 'admin' || $data['status'] !== 'active' || $adminPerms !== null)
+        && full_admin_count($id) < 1) {
+        $errors['role'] = 'ต้องมีผู้ดูแลระบบเต็มสิทธิ์ที่ใช้งานได้อย่างน้อย 1 คน';
     }
 
     // ---------- บันทึก ----------
@@ -111,7 +144,11 @@ if (is_post()) {
                     $data['last_name'], $deptId, $data['position'], $data['academic_standing'],
                     $data['email'], $data['phone'], $data['role'], $data['status'], $mustChange]
             );
-            log_activity('user_create', 'เพิ่มผู้ใช้ ' . $data['username'] . ' สิทธิ์ ' . $data['role']);
+            if ($permReady && $adminPerms !== null) {
+                db_exec('UPDATE users SET admin_permissions = ? WHERE id = ?', 'si', [$adminPerms, $newId]);
+            }
+            log_activity('user_create', 'เพิ่มผู้ใช้ ' . $data['username'] . ' สิทธิ์ ' . $data['role']
+                . ($adminPerms !== null ? ' (เจ้าหน้าที่ดูแลระบบ: ' . implode(', ', json_decode($adminPerms, true)) . ')' : ''));
             flash('success', 'เพิ่มผู้ใช้ ' . $data['username'] . ' เรียบร้อยแล้ว');
             redirect('admin/user_edit.php?id=' . $newId);
         }
@@ -125,6 +162,9 @@ if (is_post()) {
                 $data['position'], $data['academic_standing'], $data['email'], $data['phone'], $data['role'],
                 $data['status'], $id]
         );
+        if ($permReady && $adminPerms !== $oldPerms) {
+            db_exec('UPDATE users SET admin_permissions = ? WHERE id = ?', 'si', [$adminPerms, $id]);
+        }
         if ($password !== '') {
             db_exec('UPDATE users SET password_hash = ?, must_change_password = ? WHERE id = ?', 'sii',
                 [password_hash($password, PASSWORD_DEFAULT), $mustChange, $id]);
@@ -135,6 +175,10 @@ if (is_post()) {
         }
         if ($editing['status'] !== $data['status']) {
             $changes[] = 'สถานะ ' . $editing['status'] . ' → ' . $data['status'];
+        }
+        if ($adminPerms !== $oldPerms && $data['role'] === 'admin') {
+            $changes[] = $adminPerms === null ? 'ตั้งเป็นผู้ดูแลระบบเต็มสิทธิ์'
+                : 'สิทธิ์เจ้าหน้าที่ดูแลระบบ: ' . (implode(', ', json_decode($adminPerms, true)) ?: 'ไม่มี');
         }
         if ($password !== '') {
             $changes[] = 'ตั้งรหัสผ่านใหม่';
@@ -193,12 +237,13 @@ require APP_ROOT . '/includes/header.php';
                                     <option value="<?= (int)$d['id'] ?>" <?= (int)$val('department_id') === (int)$d['id'] ? 'selected' : '' ?>><?= e($d['name']) ?></option>
                                 <?php endforeach; ?>
                             </select><?= $err('department_id') ?>
+                            <div class="form-text">ตำแหน่งเจ้าหน้าที่งาน และผู้บริหาร เลือก “ไม่สังกัดแผนก” ได้</div>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label" for="position">ตำแหน่ง</label>
                             <input class="form-control" name="position" id="position" value="<?= e($val('position')) ?>" maxlength="100" list="positionList">
-                            <datalist id="positionList"><?php foreach (array_merge(position_options(), reviewer_position_list(), advisor_staff_positions()) as $p): ?><option value="<?= e($p) ?>"><?php endforeach; ?></datalist>
-                            <div class="form-text">ตำแหน่งผู้ตรวจงาน: <?= e(implode(' · ', reviewer_position_list())) ?> (ได้สิทธิ์ตรวจงานตามประเภทอัตโนมัติ)<br>ผู้ตรวจรายงานครูที่ปรึกษา: <?= e(implode(' · ', advisor_staff_positions())) ?></div>
+                            <datalist id="positionList"><?php foreach (array_merge(position_options(), reviewer_position_list()) as $p): ?><option value="<?= e($p) ?>"><?php endforeach; ?></datalist>
+                            <div class="form-text">ตำแหน่งผู้ตรวจงาน: <?= e(implode(' · ', reviewer_position_list())) ?> (ได้สิทธิ์ตรวจงานตามประเภทอัตโนมัติ)<br>หัวหน้างาน/เจ้าหน้าที่งานครูที่ปรึกษาและแนะแนว: เลือกที่ช่อง “สิทธิ์การใช้งาน”</div>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label" for="academic_standing">วิทยฐานะ</label>
@@ -219,6 +264,59 @@ require APP_ROOT . '/includes/header.php';
                     </div>
                 </div>
             </div>
+
+            <?php if ($isFullEditor):
+                $permType = is_post() ? (post('admin_type') === 'limited' ? 'limited' : 'full') : (($editing && is_limited_admin($editing)) ? 'limited' : 'full');
+                $permSel = is_post() ? array_filter((array)($_POST['perms'] ?? []), 'is_string') : (admin_permissions_of($editing ?? []) ?? []);
+                $permLocked = $isSelf || !$permReady;
+                ?>
+                <div class="card mt-4" id="adminPermCard">
+                    <div class="card-header"><i class="bi bi-person-lock me-2"></i>สิทธิ์ผู้ดูแลระบบ / เจ้าหน้าที่ดูแลระบบ</div>
+                    <div class="card-body">
+                        <?php if (!$permReady): ?>
+                            <div class="alert alert-warning mb-3">ยังไม่ได้นำเข้า <code>update_v1.17.sql</code> — ยังกำหนดสิทธิ์เจ้าหน้าที่ดูแลระบบไม่ได้ (บัญชีผู้ดูแลระบบทุกบัญชีเป็นเต็มสิทธิ์)</div>
+                        <?php elseif ($isSelf): ?>
+                            <div class="alert alert-info mb-3">ไม่สามารถเปลี่ยนสิทธิ์ผู้ดูแลระบบของตนเองได้ (ป้องกันการล็อกตนเองออกจากระบบ)</div>
+                        <?php endif; ?>
+                        <div class="d-flex flex-wrap gap-4 mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="admin_type" id="adminTypeFull" value="full" <?= $permType === 'full' ? 'checked' : '' ?> <?= $permLocked ? 'disabled' : '' ?>>
+                                <label class="form-check-label" for="adminTypeFull"><strong>ผู้ดูแลระบบเต็มสิทธิ์</strong><br><small class="text-muted">ใช้ได้ทุกเมนู และกำหนดสิทธิ์ให้ผู้อื่นได้</small></label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="admin_type" id="adminTypeLimited" value="limited" <?= $permType === 'limited' ? 'checked' : '' ?> <?= $permLocked ? 'disabled' : '' ?>>
+                                <label class="form-check-label" for="adminTypeLimited"><strong>เจ้าหน้าที่ดูแลระบบ (กำหนดสิทธิ์)</strong><br><small class="text-muted">ใช้ได้เฉพาะเมนูที่ติ๊กด้านล่าง · แก้ไขบัญชีผู้ดูแลระบบไม่ได้</small></label>
+                            </div>
+                        </div>
+                        <div id="adminPermList">
+                            <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+                                <span class="small text-muted">แม่แบบสิทธิ์:</span>
+                                <?php foreach (admin_permission_presets() as $pk => [$plabel, $pperms]): ?>
+                                    <button type="button" class="btn btn-sm btn-outline-primary" data-perm-preset="<?= e(implode(',', $pperms)) ?>" <?= $permLocked ? 'disabled' : '' ?>><?= e($plabel) ?></button>
+                                <?php endforeach; ?>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" data-perm-preset="" <?= $permLocked ? 'disabled' : '' ?>>ล้างทั้งหมด</button>
+                            </div>
+                            <div class="row g-3">
+                                <?php foreach ($permGroups as $gname => $gperms): ?>
+                                    <div class="col-md-6">
+                                        <div class="fw-semibold small text-primary-th mb-1"><?= e($gname) ?></div>
+                                        <?php foreach ($gperms as $pkey => [$plabel, , $risky]): ?>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="perms[]" value="<?= e($pkey) ?>" id="perm_<?= e($pkey) ?>"
+                                                    <?= in_array($pkey, $permSel, true) ? 'checked' : '' ?> <?= $permLocked ? 'disabled' : '' ?>>
+                                                <label class="form-check-label small" for="perm_<?= e($pkey) ?>"><?= e($plabel) ?>
+                                                    <?php if ($risky): ?><span class="badge bg-danger-subtle text-danger border border-danger-subtle ms-1">หน้าเสี่ยง</span><?php endif; ?></label>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                            <div class="form-text mt-2">ทุกบัญชีเปิดแดชบอร์ดและกระดานข่าวได้ · หน้าที่ไม่ได้รับสิทธิ์จะถูกซ่อนจากเมนู และเปิดด้วย URL ตรงจะถูกปฏิเสธ
+                                · “หน้าเสี่ยง” เข้าถึงข้อมูลผู้ใช้ การตั้งค่า หรือฐานข้อมูลทั้งระบบ ควรให้เฉพาะผู้ที่จำเป็น</div>
+                        </div>
+                    </div>
+                </div>
+            <?php endif; ?>
         </div>
 
         <div class="col-xl-4">
@@ -231,11 +329,28 @@ require APP_ROOT . '/includes/header.php';
                     </div>
                     <div class="mb-3">
                         <label class="form-label" for="role">สิทธิ์การใช้งาน (Role) *</label>
+                        <?php
+                        // ค่าที่เลือกอยู่: ครูผู้สอนที่มีตำแหน่งเจ้าหน้าที่งาน แสดงเป็นตัวเลือกสิทธิ์ตามตำแหน่ง
+                        $roleSel = $val('role', 'teacher');
+                        $staffIdx = array_search(normalize_position($val('position')), advisor_staff_positions(), true);
+                        if (!is_post() && $roleSel === 'teacher' && $staffIdx !== false) {
+                            $roleSel = 'pos:' . $staffIdx;
+                        }
+                        ?>
                         <select class="form-select<?= $invalid('role') ?>" name="role" id="role" <?= $isSelf ? 'disabled' : '' ?>>
-                            <?php foreach (role_labels() as $k => $v): ?>
-                                <option value="<?= e($k) ?>" <?= $val('role', 'teacher') === $k ? 'selected' : '' ?>><?= e($v) ?></option>
-                            <?php endforeach; ?>
+                            <optgroup label="สิทธิ์หลัก">
+                                <?php foreach (role_labels() as $k => $v): if ($k === 'admin' && !$isFullEditor) continue; ?>
+                                    <option value="<?= e($k) ?>" <?= $roleSel === $k ? 'selected' : '' ?>><?= e($v) ?></option>
+                                <?php endforeach; ?>
+                            </optgroup>
+                            <optgroup label="งานครูที่ปรึกษาและแนะแนว (สิทธิ์ครูผู้สอน + ตำแหน่ง)">
+                                <?php foreach (advisor_staff_positions() as $i => $p): ?>
+                                    <option value="pos:<?= $i ?>" data-position="<?= e($p) ?>" <?= $roleSel === 'pos:' . $i ? 'selected' : '' ?>><?= e($p) ?></option>
+                                <?php endforeach; ?>
+                            </optgroup>
                         </select><?= $err('role') ?>
+                        <div class="form-text">เลือกหัวหน้างาน/เจ้าหน้าที่งานครูที่ปรึกษาและแนะแนว ระบบจะตั้งตำแหน่งให้อัตโนมัติ และได้สิทธิ์ตรวจรายงานกิจกรรมโฮมรูม/การเยี่ยมบ้าน
+                            (เจ้าหน้าที่งานไม่ต้องสังกัดแผนกวิชา · หัวหน้างานต้องเลือกแผนก เพราะเป็นครูผู้สอนด้วย)</div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label" for="status">สถานะ *</label>
@@ -282,4 +397,40 @@ require APP_ROOT . '/includes/header.php';
         </div>
     </div>
 </form>
-<?php require APP_ROOT . '/includes/footer.php'; ?>
+<?php
+// เลือกสิทธิ์ตามตำแหน่ง → เติมช่องตำแหน่งให้ (เจ้าหน้าที่งาน: ตั้งเป็นไม่สังกัดแผนก)
+$pageScripts = '(function () {
+    var role = document.getElementById("role"), pos = document.getElementById("position"), dept = document.getElementById("department_id");
+    if (!role) return;
+    var STAFF_POS = ' . json_encode(advisor_staff_positions(), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) . ';
+    role.addEventListener("change", function () {
+        var p = role.options[role.selectedIndex].getAttribute("data-position");
+        if (!p) {
+            // เปลี่ยนกลับเป็นสิทธิ์หลัก: ล้างตำแหน่งงานครูที่ปรึกษาฯ
+            if (STAFF_POS.indexOf(pos.value.trim()) !== -1) pos.value = role.value === "teacher" ? "ครู" : "";
+            return;
+        }
+        pos.value = p;
+        if (p.indexOf("เจ้าหน้าที่งาน") === 0) dept.value = "0";
+    });
+})();
+(function () {
+    var card = document.getElementById("adminPermCard"), role = document.getElementById("role");
+    if (!card || !role) return;
+    var list = document.getElementById("adminPermList"), limited = document.getElementById("adminTypeLimited");
+    function sync() {
+        card.style.display = role.value === "admin" ? "" : "none";
+        list.style.display = limited.checked ? "" : "none";
+    }
+    role.addEventListener("change", sync);
+    card.querySelectorAll("input[name=admin_type]").forEach(function (r) { r.addEventListener("change", sync); });
+    card.querySelectorAll("[data-perm-preset]").forEach(function (b) {
+        b.addEventListener("click", function () {
+            var keys = b.getAttribute("data-perm-preset").split(",");
+            card.querySelectorAll("input[name=\\"perms[]\\"]").forEach(function (c) { c.checked = keys.indexOf(c.value) !== -1; });
+        });
+    });
+    sync();
+})();';
+require APP_ROOT . '/includes/footer.php';
+

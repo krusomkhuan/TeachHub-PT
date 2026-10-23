@@ -43,7 +43,7 @@ function is_advisor_staff_only(array $user): bool
 /** จัดการกลุ่มที่ปรึกษา วันงดพบ และตรวจรายงานได้ (admin + งานครูที่ปรึกษาฯ) */
 function can_manage_advisor(array $user): bool
 {
-    return $user['role'] === 'admin' || is_advisor_staff($user);
+    return admin_can($user, 'advisor') || is_advisor_staff($user);
 }
 
 /** กำหนด/ยกเลิกวันงดพบได้ — เฉพาะหัวหน้างานและเจ้าหน้าที่งานครูที่ปรึกษาและแนะแนว (admin ดูได้อย่างเดียว) */
@@ -275,7 +275,7 @@ function can_view_advisor_teacher(array $user, int $teacherId): bool
 /** ผู้ใช้ตรวจรายงานนี้ได้หรือไม่ (admin ทุกฉบับ / งานครูที่ปรึกษาฯ ยกเว้นของตนเอง) */
 function can_review_advisor_report(array $user, array $report): bool
 {
-    if ($user['role'] === 'admin') {
+    if (admin_can($user, 'advisor')) {
         return true;
     }
     return is_advisor_staff($user) && (int)$report['teacher_id'] !== (int)$user['id'];

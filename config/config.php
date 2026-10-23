@@ -11,7 +11,7 @@
 define('APP_DEBUG', true);
 
 define('APP_NAME', 'TeachHub PT');
-define('APP_VERSION', '1.16.0');
+define('APP_VERSION', '1.17.0');
 define('APP_DEVELOPER', 'ครูสมควร สากำ');
 
 // ---------------------------------------------------------------
@@ -76,6 +76,7 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/db.php';
 require_once APP_ROOT . '/includes/functions.php';
 require_once APP_ROOT . '/includes/auth.php';
+require_once APP_ROOT . '/includes/admin_perm.php';
 require_once APP_ROOT . '/includes/submissions.php';
 require_once APP_ROOT . '/includes/supervision.php';
 require_once APP_ROOT . '/includes/student_eval.php';

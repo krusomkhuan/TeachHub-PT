@@ -58,6 +58,7 @@ CREATE TABLE `users` (
   `avatar`                VARCHAR(255) NULL,
   `role`                  ENUM('admin','supervisor','teacher','executive') NOT NULL DEFAULT 'teacher',
   `status`                ENUM('pending','active','suspended') NOT NULL DEFAULT 'pending',
+  `admin_permissions`     TEXT         NULL DEFAULT NULL COMMENT 'สิทธิ์เจ้าหน้าที่ดูแลระบบ (JSON) — NULL = ผู้ดูแลระบบเต็มสิทธิ์ ใช้เฉพาะ role admin',
   `must_change_password`  TINYINT(1)   NOT NULL DEFAULT 0,
   `google_sub`            VARCHAR(64)  NULL COMMENT 'รหัสบัญชี Google ที่เชื่อมไว้ (เข้าสู่ระบบด้วย Google)',
   `password_login`        TINYINT(1)   NOT NULL DEFAULT 1 COMMENT '0 = สมัครด้วย Google ยังไม่เคยตั้งรหัสผ่าน',

@@ -8,11 +8,11 @@
 
 // ตัวเลขแจ้งเตือนบนเมนู
 $badgeCounts = [];
-if ($user['role'] === 'admin') {
+if (admin_can($user, 'users')) {
     $badgeCounts['admin/users.php'] = (int)db_value("SELECT COUNT(*) FROM users WHERE status = 'pending'")
         + (int)db_value("SELECT COUNT(*) FROM password_reset_requests WHERE status = 'pending'");
 }
-if (in_array($user['role'], ['admin', 'executive'], true)) {
+if (admin_can($user, 'supervision_reports') || $user['role'] === 'executive') {
     // รายงานการนิเทศที่รอผู้ใช้คนนี้พิจารณา
     $badgeCounts['reports/supervision_reports.php'] = report_pending_count((int)$user['id']);
 }
@@ -206,6 +206,15 @@ if (can_manage_advisor($user)) {
     $roleMenu['รายงาน'][] = ['สรุปรายงานกิจกรรมโฮมรูม', 'reports/advisor_summary.php', 'bi-people'];
     $roleMenu['รายงาน'][] = ['สรุปรายงานการเยี่ยมบ้าน', 'reports/home_visit_summary.php', 'bi-house-heart'];
 }
+// เจ้าหน้าที่ดูแลระบบ: เห็นเฉพาะเมนูที่ผู้ดูแลระบบกำหนดสิทธิ์ให้ (หน้าเองก็ตรวจสิทธิ์ซ้ำที่ require_login)
+if (is_limited_admin($user)) {
+    foreach ($roleMenu as $group => $items) {
+        $roleMenu[$group] = array_values(array_filter($items, fn($it) => admin_can_path($user, $it[1])));
+        if (!$roleMenu[$group]) {
+            unset($roleMenu[$group]);
+        }
+    }
+}
 // เจ้าหน้าที่งานครูที่ปรึกษาและแนะแนว: เห็นเฉพาะเมนูงานครูที่ปรึกษา (+ เมนูส่งรายงานของตนเองถ้าเป็นครูที่ปรึกษาด้วย)
 if (is_advisor_staff_only($user)) {
     $staffMenu = ['งานครูที่ปรึกษา' => $roleMenu['งานครูที่ปรึกษา (ตามตำแหน่ง)'] ?? []];
@@ -223,7 +232,7 @@ $activeMenu = $activeMenu ?? $currentPath; // หน้าย่อยกำห�
         <img src="<?= e($logo) ?>" alt="โลโก้" class="sidebar-logo">
         <div class="lh-sm">
             <div class="sidebar-title"><?= e(system_name()) ?></div>
-            <small class="sidebar-sub"><?= e(role_label($user['role'])) ?></small>
+            <small class="sidebar-sub"><?= e(user_role_label($user)) ?></small>
         </div>
         <button type="button" class="btn-close btn-close-white ms-auto d-lg-none" data-bs-dismiss="offcanvas"
                 data-bs-target="#appSidebar" aria-label="ปิดเมนู"></button>
@@ -254,7 +263,7 @@ $activeMenu = $activeMenu ?? $currentPath; // หน้าย่อยกำห�
         <?php endforeach; ?>
 
         <div class="sidebar-heading">ติดต่อประสานงาน</div>
-        <?php $boardOpen = $user['role'] === 'admin' ? board_open_count() : 0; ?>
+        <?php $boardOpen = board_can_moderate($user) ? board_open_count() : 0; ?>
         <a href="<?= e(url('board/index.php')) ?>" class="sidebar-link<?= $activeMenu === 'board/index.php' ? ' active' : '' ?>">
             <i class="bi bi-chat-square-text"></i><span>กระดานข่าว</span>
             <?php if ($boardOpen > 0): ?><span class="badge rounded-pill bg-danger ms-auto" title="กระทู้รอตอบ"><?= $boardOpen ?></span><?php endif; ?>

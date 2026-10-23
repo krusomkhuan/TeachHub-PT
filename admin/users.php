@@ -8,6 +8,8 @@ require_once __DIR__ . '/../config/config.php';
 
 $user = require_role('admin');
 $myId = (int)$user['id'];
+// เจ้าหน้าที่ดูแลระบบ (สิทธิ์จัดการผู้ใช้) จัดการบัญชีผู้ดูแลระบบ/เจ้าหน้าที่ดูแลระบบด้วยกันไม่ได้
+$limitedEditor = is_limited_admin($user);
 
 // =====================================================================
 // จัดการคำสั่ง (POST)
@@ -36,7 +38,11 @@ if (is_post()) {
         redirect($return);
     }
     $name = full_name($target) . ' (' . $target['username'] . ')';
-    $activeAdmins = (int)db_value("SELECT COUNT(*) FROM users WHERE role = 'admin' AND status = 'active'");
+    if ($limitedEditor && $target['role'] === 'admin') {
+        log_activity('access_denied', 'เจ้าหน้าที่ดูแลระบบพยายามจัดการบัญชีผู้ดูแลระบบ ' . $name);
+        flash('error', 'เจ้าหน้าที่ดูแลระบบจัดการบัญชีผู้ดูแลระบบไม่ได้');
+        redirect($return);
+    }
 
     switch ($action) {
         // ---------- อนุมัติสมาชิก ----------
@@ -56,8 +62,8 @@ if (is_post()) {
         case 'suspend':
             if ($targetId === $myId) {
                 flash('error', 'ไม่สามารถระงับบัญชีของตนเองได้');
-            } elseif ($target['role'] === 'admin' && $activeAdmins <= 1) {
-                flash('error', 'ต้องมีผู้ดูแลระบบที่ใช้งานได้อย่างน้อย 1 คน');
+            } elseif (is_full_admin($target) && full_admin_count($targetId) < 1) {
+                flash('error', 'ต้องมีผู้ดูแลระบบเต็มสิทธิ์ที่ใช้งานได้อย่างน้อย 1 คน');
             } else {
                 db_exec("UPDATE users SET status = 'suspended' WHERE id = ?", 'i', [$targetId]);
                 log_activity('user_suspend', 'ระงับ ' . $name);
@@ -157,7 +163,7 @@ $users = db_all(
 );
 $departments = db_all('SELECT id, name FROM departments ORDER BY name');
 $requests = db_all(
-    "SELECT r.*, u.username, u.prefix, u.first_name, u.last_name, u.email, u.phone
+    "SELECT r.*, u.username, u.prefix, u.first_name, u.last_name, u.email, u.phone, u.role
      FROM password_reset_requests r JOIN users u ON u.id = r.user_id
      WHERE r.status = 'pending' ORDER BY r.created_at"
 );
@@ -200,10 +206,14 @@ function user_action_form(string $action, int $userId, string $label, string $bt
                         <td class="small"><?= e(thai_datetime($rq['created_at'])) ?></td>
                         <td class="small"><?= e($rq['requested_ip']) ?></td>
                         <td class="text-end text-nowrap">
+                            <?php if ($limitedEditor && $rq['role'] === 'admin'): ?>
+                                <span class="small text-muted"><i class="bi bi-lock"></i> บัญชีผู้ดูแลระบบ</span>
+                            <?php else: ?>
                             <?= user_action_form('reset_password', (int)$rq['user_id'], 'รีเซ็ตรหัสผ่าน', 'btn btn-sm btn-warning',
                                 'รีเซ็ตรหัสผ่านของ ' . full_name($rq) . ' และสร้างรหัสผ่านชั่วคราว?', 'bi-arrow-repeat', (int)$rq['id']) ?>
                             <?= user_action_form('reject_request', (int)$rq['user_id'], 'ปฏิเสธคำขอ', 'btn btn-sm btn-outline-secondary',
                                 'ปฏิเสธคำขอรีเซ็ตรหัสผ่านนี้?', 'bi-x-lg', (int)$rq['id']) ?>
+                            <?php endif; ?>
                         </td>
                     </tr>
                 <?php endforeach; ?>
@@ -282,11 +292,14 @@ function user_action_form(string $action, int $userId, string $label, string $bt
                         </td>
                         <td><?= e($u['username']) ?><br><small class="text-muted"><?= e($u['phone'] ?: '-') ?></small></td>
                         <td class="small"><?= e($u['department_name'] ?? '-') ?></td>
-                        <td class="small"><?= e(role_label($u['role'])) ?></td>
+                        <td class="small"><?= e(user_role_label($u)) ?></td>
                         <td data-order="<?= e($u['status']) ?>"><?= user_status_badge($u['status']) ?>
                             <?php if ($u['must_change_password']): ?><br><small class="text-warning">รอเปลี่ยนรหัส</small><?php endif; ?></td>
                         <td class="small" data-order="<?= e((string)$u['last_login_at']) ?>"><?= e(thai_datetime($u['last_login_at'])) ?></td>
                         <td class="text-end text-nowrap">
+                            <?php if ($limitedEditor && $u['role'] === 'admin'): ?>
+                                <span class="small text-muted" title="เจ้าหน้าที่ดูแลระบบจัดการบัญชีผู้ดูแลระบบไม่ได้" data-bs-toggle="tooltip"><i class="bi bi-lock"></i></span>
+                            <?php else: ?>
                             <?php if ($u['status'] === 'pending'): ?>
                                 <?= user_action_form('approve', $uidRow, 'อนุมัติ', 'btn btn-sm btn-success', 'อนุมัติ ' . full_name($u) . ' ให้เข้าใช้งาน?', 'bi-check-lg') ?>
                             <?php endif; ?>
@@ -300,6 +313,7 @@ function user_action_form(string $action, int $userId, string $label, string $bt
                                 <?php else: ?>
                                     <?= user_action_form('delete', $uidRow, 'ลบผู้สมัคร', 'btn btn-sm btn-outline-danger', 'ลบผู้สมัคร ' . full_name($u) . ' ออกจากระบบ? (ไม่สามารถกู้คืนได้)', 'bi-trash') ?>
                                 <?php endif; ?>
+                            <?php endif; ?>
                             <?php endif; ?>
                         </td>
                     </tr>

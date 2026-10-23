@@ -156,6 +156,8 @@ function require_login(): array
     if (pdpa_needs_consent($user) && !in_array($script, ['change_password.php', 'logout.php', 'pdpa_consent.php'], true)) {
         redirect('auth/pdpa_consent.php');
     }
+    // เจ้าหน้าที่ดูแลระบบ: เปิดได้เฉพาะหน้าที่ได้รับสิทธิ์ (ตรวจฝั่งเซิร์ฟเวอร์ทุกหน้า ไม่ใช่แค่ซ่อนเมนู)
+    admin_perm_enforce($user);
 
     return $user;
 }
