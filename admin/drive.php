@@ -8,8 +8,8 @@ require_once __DIR__ . '/../config/config.php';
 
 $user = require_role('admin');
 $self = 'admin/drive.php';
-const DRIVE_BATCH_FILES = 20;
-const DRIVE_BATCH_SECONDS = 20;
+const DRIVE_BATCH_FILES = 10;
+const DRIVE_BATCH_SECONDS = 12; // เผื่อโฮสต์ที่ max_execution_time = 30 และปิด set_time_limit
 
 /**
  * ย้ายไฟล์ 1 ชุด
@@ -134,6 +134,9 @@ if (is_post()) {
             $res = drive_batch($action);
         }
         if ($ajax) {
+            while (ob_get_level()) {
+                ob_end_clean(); // ข้อความเตือน PHP ที่ค้างอยู่จะทำให้ JSON เสีย
+            }
             header('Content-Type: application/json; charset=utf-8');
             echo json_encode($res, JSON_UNESCAPED_UNICODE);
             exit;
@@ -165,7 +168,7 @@ $pageTitle = 'ที่เก็บไฟล์ Google Drive';
 $pageIcon = 'bi-google';
 $breadcrumbs = ['ที่เก็บไฟล์ Google Drive' => null];
 $pageScripts = <<<'JS'
-// ย้ายไฟล์ทีละชุดจนครบ (แต่ละชุดไม่เกิน 20 ไฟล์ / 20 วินาที กันหมดเวลาบนโฮสติ้ง)
+// ย้ายไฟล์ทีละชุดจนครบ (แต่ละชุดไม่เกิน 10 ไฟล์ / ~12 วินาที กันหมดเวลาบนโฮสติ้ง)
 document.querySelectorAll('form[data-batch]').forEach(function (form) {
     form.addEventListener('submit', function (ev) {
         ev.preventDefault();
@@ -178,8 +181,16 @@ document.querySelectorAll('form[data-batch]').forEach(function (form) {
         var step = function () {
             var fd = new FormData(form);
             fd.append('ajax', '1');
-            fetch(form.action || location.href, {method: 'POST', body: fd, credentials: 'same-origin'})
-                .then(function (r) { return r.json(); })
+            // ใช้ getAttribute: form.action ถูก <input name="action"> บังไว้
+            fetch(form.getAttribute('action') || location.href, {method: 'POST', body: fd, credentials: 'same-origin', headers: {'Accept': 'application/json'}})
+                .then(function (r) {
+                    return r.text().then(function (t) {
+                        try { return JSON.parse(t); } catch (e) {
+                            throw new Error('HTTP ' + r.status + (r.status === 200 ? ' (เซิร์ฟเวอร์ตอบกลับไม่ใช่ JSON)' : '')
+                                + (r.status >= 500 || r.status === 0 ? ' — อาจหมดเวลาประมวลผลบนโฮสต์ ลองกดอีกครั้ง' : ''));
+                        }
+                    });
+                })
                 .then(function (d) {
                     total += d.done;
                     out.textContent = 'ดำเนินการแล้ว ' + total + ' ไฟล์ · คงเหลือ ' + d.remaining + ' ไฟล์' + (d.error ? ' — ล่าสุด: ' + d.error : '');
@@ -191,9 +202,10 @@ document.querySelectorAll('form[data-batch]').forEach(function (form) {
                         setTimeout(function () { location.reload(); }, 2500);
                     }
                 })
-                .catch(function () {
+                .catch(function (err) {
                     out.className = 'alert alert-danger small';
-                    out.textContent = 'เกิดข้อผิดพลาดในการเชื่อมต่อ ดำเนินการแล้ว ' + total + ' ไฟล์ — กดอีกครั้งเพื่อทำต่อ';
+                    out.textContent = 'เกิดข้อผิดพลาด (' + (err && err.message ? err.message : 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้') + ') ดำเนินการแล้ว '
+                        + total + ' ไฟล์ — กดอีกครั้งเพื่อทำต่อ';
                     btn.disabled = false;
                 });
         };
