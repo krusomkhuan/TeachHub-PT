@@ -7,6 +7,7 @@
  *   - พบบัญชีที่เชื่อม Google ไว้แล้ว / อีเมลตรงกับบัญชีเดิม → เข้าสู่ระบบ (ถ้าอนุมัติแล้ว)
  *   - ยังไม่มีบัญชี → ไปหน้าสมัครสมาชิก กรอกข้อมูลเพิ่ม (แผนก ตำแหน่ง เบอร์โทร) แล้วรอ admin อนุมัติ
  * ตั้งค่าที่ ตั้งค่าระบบ: google_enabled, google_client_id, google_client_secret, google_allowed_domain
+ * โหมด drive (v1.18): ใช้ Client เดียวกันขอสิทธิ์ Google Drive ให้ระบบเก็บไฟล์ (ดู includes/drive.php)
  */
 
 /** เปิดใช้และตั้งค่าครบหรือไม่ */
@@ -42,6 +43,9 @@ function google_endpoint(string $name): string
         'auth'     => 'https://accounts.google.com/o/oauth2/v2/auth',
         'token'    => 'https://oauth2.googleapis.com/token',
         'userinfo' => 'https://openidconnect.googleapis.com/v1/userinfo',
+        'revoke'   => 'https://oauth2.googleapis.com/revoke',
+        'drive'        => 'https://www.googleapis.com/drive/v3',
+        'drive_upload' => 'https://www.googleapis.com/upload/drive/v3',
     ];
     return $map[$name];
 }
@@ -54,7 +58,7 @@ function google_b64url(string $bin): string
 
 /**
  * สร้าง URL ไปหน้าเลือกบัญชี Google และเก็บ state/PKCE ไว้ใน session
- * @param string $mode login (เข้าสู่ระบบ/สมัคร) | link (เชื่อมบัญชีจากหน้าโปรไฟล์)
+ * @param string $mode login (เข้าสู่ระบบ/สมัคร) | link (เชื่อมบัญชีจากหน้าโปรไฟล์) | drive (เชื่อมต่อที่เก็บไฟล์ Google Drive)
  */
 function google_auth_url(string $mode, string $next = ''): string
 {
@@ -77,7 +81,12 @@ function google_auth_url(string $mode, string $next = ''): string
         'code_challenge_method' => 'S256',
         'prompt'                => 'select_account',
     ];
-    if (google_allowed_domain() !== '') {
+    if ($mode === 'drive') {
+        // ขอ refresh token เพื่อให้ระบบเข้าถึง Drive ได้ตลอด (prompt=consent ให้ Google ส่ง refresh token ทุกครั้ง)
+        $params['scope'] = 'openid email ' . drive_scope();
+        $params['access_type'] = 'offline';
+        $params['prompt'] = 'consent select_account';
+    } elseif (google_allowed_domain() !== '') {
         $params['hd'] = google_allowed_domain();
     }
     return google_endpoint('auth') . '?' . http_build_query($params);
@@ -159,7 +168,7 @@ function google_handle_callback(array $query): array
         return $fail('อีเมลของบัญชี Google นี้ยังไม่ได้ยืนยัน');
     }
     $email = mb_strtolower((string)$info['email']);
-    $domain = google_allowed_domain();
+    $domain = $saved['mode'] === 'drive' ? '' : google_allowed_domain(); // บัญชีเก็บไฟล์ไม่จำกัดโดเมน
     if ($domain !== '' && substr($email, -strlen('@' . $domain)) !== '@' . $domain) {
         return $fail('อนุญาตเฉพาะบัญชี Google ของโดเมน @' . $domain);
     }
@@ -171,6 +180,7 @@ function google_handle_callback(array $query): array
             'given_name'  => mb_substr((string)($info['given_name'] ?? ''), 0, 100),
             'family_name' => mb_substr((string)($info['family_name'] ?? ''), 0, 100),
         ],
+        'token' => $saved['mode'] === 'drive' ? $token : null,
     ];
 }
 

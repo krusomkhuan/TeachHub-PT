@@ -5,13 +5,39 @@
  */
 require_once __DIR__ . '/../config/config.php';
 
-if (!google_enabled()) {
+// โหมด drive (เชื่อมต่อที่เก็บไฟล์) ใช้ได้แม้ปิดปุ่มเข้าสู่ระบบด้วย Google — ต้องตั้ง Client ID/Secret ไว้เท่านั้น
+$isDrive = ($_SESSION['google_oauth']['mode'] ?? '') === 'drive';
+if (!($isDrive ? drive_client_ready() : google_enabled())) {
     redirect('auth/login.php');
 }
 check_session_timeout();
 
 $res = google_handle_callback($_GET);
 $mode = $res['mode'];
+
+// ---------- เชื่อมต่อ Google Drive เป็นที่เก็บไฟล์ (admin/drive.php) ----------
+if ($mode === 'drive') {
+    $user = current_user();
+    if (!$user || !admin_can($user, 'drive')) {
+        redirect('auth/login.php');
+    }
+    if (!$res['ok']) {
+        flash('error', $res['error']);
+        redirect('admin/drive.php');
+    }
+    $fin = drive_finish_connect($res, $user);
+    if ($fin['ok']) {
+        log_activity('drive_connect', 'เชื่อมต่อ Google Drive ' . $res['profile']['email']);
+        flash($fin['error'] === '' ? 'success' : 'warning', $fin['error'] !== '' ? $fin['error']
+            : 'เชื่อมต่อ Google Drive (' . $res['profile']['email'] . ') เรียบร้อยแล้ว');
+    } else {
+        flash('error', $fin['error']);
+    }
+    redirect('admin/drive.php');
+}
+if (!google_enabled()) {
+    redirect('auth/login.php');
+}
 
 // ---------- เชื่อมบัญชี Google จากหน้าโปรไฟล์ ----------
 if ($mode === 'link') {

@@ -17,7 +17,7 @@ SET time_zone = '+07:00';
 SET FOREIGN_KEY_CHECKS = 0;
 
 -- ลบตารางเดิม (กรณีติดตั้งใหม่)
-DROP TABLE IF EXISTS `activity_logs`, `password_reset_requests`, `board_replies`, `board_topics`, `settings`, `downloads`, `download_categories`,
+DROP TABLE IF EXISTS `activity_logs`, `drive_files`, `password_reset_requests`, `board_replies`, `board_topics`, `settings`, `downloads`, `download_categories`,
   `plan_eval_items`, `plan_evaluations`, `plan_eval_criteria`,
   `home_visit_images`, `home_visits`, `advisor_report_images`, `advisor_reports`, `advisor_skip_dates`, `advisor_groups`,
   `supervision_report_actions`, `supervision_reports`,
@@ -953,6 +953,20 @@ CREATE TABLE `activity_logs` (
     REFERENCES `users` (`id`) ON UPDATE CASCADE ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- ---------------------------------------------------------------------
+-- 21) ไฟล์งานที่เก็บใน Google Drive (v1.18) — ไฟล์ที่ไม่มีในตารางนี้อยู่บนโฮสต์ใน uploads/
+-- ---------------------------------------------------------------------
+CREATE TABLE `drive_files` (
+  `id`           INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `subdir`       VARCHAR(30) NOT NULL COMMENT 'โฟลเดอร์ใน uploads/ เช่น lesson_plans, supervision',
+  `stored_name`  VARCHAR(100) NOT NULL COMMENT 'ชื่อไฟล์ที่ระบบตั้ง (ตรงกับคอลัมน์ stored_name ของตารางเจ้าของไฟล์)',
+  `drive_id`     VARCHAR(128) NOT NULL COMMENT 'File ID ใน Google Drive',
+  `size`         BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  `created_at`   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_drive_file` (`subdir`, `stored_name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- =====================================================================
@@ -1116,7 +1130,12 @@ INSERT INTO `settings` (`setting_key`, `setting_value`, `description`) VALUES
 ('google_client_id',    '',                                               'Google OAuth Client ID'),
 ('google_client_secret','',                                               'Google OAuth Client Secret'),
 ('google_allowed_domain','',                                              'จำกัดอีเมล Google เฉพาะโดเมน เช่น pticec.ac.th (ว่าง = ทุกโดเมน)'),
-('advisor_late_days',   '2',                                              'รายงานครูที่ปรึกษา: ส่งได้ภายในกี่วันหลังวันพุธโดยไม่นับว่าส่งช้า');
+('advisor_late_days',   '2',                                              'รายงานครูที่ปรึกษา: ส่งได้ภายในกี่วันหลังวันพุธโดยไม่นับว่าส่งช้า'),
+('drive_enabled',       '0',                                              'เก็บไฟล์งานที่อัปโหลดใหม่ใน Google Drive (1=เปิด)'),
+('drive_root_name',     'TeachHub PT',                                    'ชื่อโฟลเดอร์หลักใน Google Drive'),
+('drive_folders',       '{}',                                             'รหัสโฟลเดอร์ใน Google Drive (ระบบจัดการเอง)'),
+('drive_parent_id',     '',                                               'ID โฟลเดอร์ปลายทางใน Google Drive (ว่าง = ระบบสร้างโฟลเดอร์ TeachHub PT ใน My Drive)'),
+('drive_backup',        '0',                                              'ส่งสำเนาไฟล์สำรองข้อมูลขึ้น Google Drive (1=เปิด)');
 
 -- Log เริ่มต้น
 INSERT INTO `activity_logs` (`user_id`, `action`, `detail`, `ip_address`) VALUES

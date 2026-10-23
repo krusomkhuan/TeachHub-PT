@@ -25,4 +25,7 @@ desktop.ini
 
 # ค่าเชื่อมต่อฐานข้อมูลของเครื่องจริง (ถ้าสร้างแยก)
 config/db.local.php
+
+# token ของ Google Drive (v1.18) — สร้างโดยระบบเมื่อเชื่อมต่อ ห้ามนำขึ้น Git
+config/drive_token.php
 .env

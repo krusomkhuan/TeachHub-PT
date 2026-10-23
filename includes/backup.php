@@ -335,6 +335,7 @@ function backup_prune_auto(int $keep): void
     $auto = array_values(array_filter(backup_list(), fn($b) => strpos($b['name'], 'auto_') === 0));
     foreach (array_slice($auto, max(1, $keep)) as $b) {
         @unlink(backup_dir() . DIRECTORY_SEPARATOR . $b['name']);
+        drive_delete('backups', $b['name']); // สำเนาใน Google Drive (ถ้ามี) เก็บจำนวนเท่ากัน
     }
 }
 
@@ -356,6 +357,7 @@ function backup_auto_maybe(): string
     if (!$res['ok']) {
         return '';
     }
+    drive_backup_copy($res['name']);
     backup_prune_auto((int)setting('backup_keep', '7'));
     log_activity('backup_auto', 'สำรองข้อมูลอัตโนมัติ ' . $res['name']);
     return $res['name'];

@@ -55,7 +55,8 @@ $add('ฐานข้อมูล', 'ok', 'เวอร์ชัน MySQL/MariaD
 $charset = (string)db_value('SELECT DEFAULT_CHARACTER_SET_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = DATABASE()');
 $add('ฐานข้อมูล', $charset === 'utf8mb4' ? 'ok' : 'warn', 'Charset ของฐานข้อมูล', $charset . ($charset === 'utf8mb4' ? '' : ' (แนะนำ utf8mb4)'));
 $tables = (int)db_value('SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE()');
-$add('ฐานข้อมูล', $tables >= 38 ? 'ok' : 'fail', 'จำนวนตาราง', $tables . ' ตาราง (ต้องมี 38'
+$add('ฐานข้อมูล', $tables >= 39 ? 'ok' : 'fail', 'จำนวนตาราง', $tables . ' ตาราง (ต้องมี 39'
+    . ($tables === 38 ? ' — ยังไม่ได้นำเข้า update_v1.18.sql' : '')
     . ($tables === 35 ? ' — ยังไม่ได้นำเข้า update_v1.15.sql' : '')
     . ($tables === 34 ? ' — ยังไม่ได้นำเข้า update_v1.14.sql' : '')
     . ($tables === 32 ? ' — ยังไม่ได้นำเข้า update_v1.13.sql' : '')
@@ -77,6 +78,49 @@ $add('ข้อมูลพื้นฐาน', report_chain_ready() ? 'ok' : 'w
         : 'ยังกำหนดไม่ครบ — หัวหน้าแผนกจะเสนอรายงานไม่ได้ (ตั้งค่าระบบ → ผู้พิจารณารายงานการนิเทศ)');
 $diff = abs(strtotime((string)db_value('SELECT NOW()')) - time());
 $add('ฐานข้อมูล', $diff < 120 ? 'ok' : 'warn', 'เวลาฐานข้อมูลตรงกับ PHP', $diff < 120 ? 'ตรงกัน' : 'ต่างกัน ' . $diff . ' วินาที');
+
+// ---------- 3.1) ที่เก็บไฟล์ Google Drive (v1.18) ----------
+if (!drive_table_ready()) {
+    $add('Google Drive', 'fail', 'ตาราง drive_files', 'ยังไม่ได้นำเข้า update_v1.18.sql');
+} elseif (!drive_token()) {
+    $onDrive = (int)db_value("SELECT COUNT(*) FROM drive_files WHERE subdir <> 'backups'");
+    $add('Google Drive', $onDrive > 0 ? 'fail' : 'ok', 'การเชื่อมต่อ', $onDrive > 0
+        ? 'ยังไม่ได้เชื่อมต่อ แต่มีไฟล์เก็บใน Drive ' . $onDrive . ' ไฟล์ — ผู้ใช้จะเปิดไฟล์เหล่านี้ไม่ได้ กรุณาเชื่อมต่อด้วยบัญชีเดิม'
+        : 'ยังไม่ได้เชื่อมต่อ — ไฟล์ทั้งหมดเก็บบนโฮสต์ (เชื่อมต่อได้ที่เมนู ที่เก็บไฟล์ Google Drive)');
+} else {
+    $about = drive_about();
+    $tok = drive_token();
+    if ($about['ok']) {
+        $q = $about['quota'];
+        $quota = isset($q['limit']) ? ' · ใช้ไป ' . format_bytes((int)($q['usage'] ?? 0)) . ' จาก ' . format_bytes((int)$q['limit'])
+            : (isset($q['usage']) ? ' · ใช้ไป ' . format_bytes((int)$q['usage']) . ' (ไม่จำกัดพื้นที่)' : '');
+        $add('Google Drive', 'ok', 'การเชื่อมต่อ', 'เชื่อมต่อบัญชี ' . ($about['user']['emailAddress'] ?? ($tok['email'] ?? '')) . $quota);
+        if (!drive_scope_ok()) {
+            $add('Google Drive', 'fail', 'สิทธิ์การเข้าถึง', 'ตั้งโฟลเดอร์ปลายทางไว้ แต่การเชื่อมต่อเดิมไม่มีสิทธิ์เข้าถึงโฟลเดอร์นั้น — กดเชื่อมต่อใหม่ที่หน้า ที่เก็บไฟล์ Google Drive');
+        } elseif (drive_parent_id() !== '') {
+            $pInfo = drive_folder_info(drive_parent_id());
+            $add('Google Drive', $pInfo['ok'] ? 'ok' : 'fail', 'โฟลเดอร์ปลายทาง', $pInfo['ok'] ? '“' . $pInfo['name'] . '” (แยกโฟลเดอร์ย่อยตามงานอัตโนมัติ)' : $pInfo['error']);
+        }
+        if (drive_root_trashed()) {
+            $add('Google Drive', 'fail', 'โฟลเดอร์เก็บไฟล์', 'โฟลเดอร์ “' . setting('drive_root_name', 'TeachHub PT') . '” อยู่ในถังขยะของ Google Drive — กู้คืนจากถังขยะ ไม่เช่นนั้นไฟล์จะถูกลบถาวรใน 30 วัน');
+        }
+        if (isset($q['limit']) && (int)$q['limit'] > 0) {
+            $pct = (int)($q['usage'] ?? 0) / (int)$q['limit'] * 100;
+            $add('Google Drive', $pct < 90 ? 'ok' : 'warn', 'พื้นที่ Google Drive', 'ใช้ไปแล้ว ' . number_format($pct, 1) . '%');
+        }
+    } else {
+        $add('Google Drive', 'fail', 'การเชื่อมต่อ', 'เชื่อมต่อ Google Drive ไม่ได้: ' . ($tok['last_error'] ?? $about['error']));
+    }
+    $add('Google Drive', setting('drive_enabled', '0') === '1' ? 'ok' : 'warn', 'เก็บไฟล์ใหม่ใน Drive',
+        setting('drive_enabled', '0') === '1' ? 'เปิดใช้งาน' : 'ปิดอยู่ — ไฟล์ที่อัปโหลดใหม่เก็บบนโฮสต์');
+    $pending = count(drive_local_files());
+    $add('Google Drive', $pending === 0 ? 'ok' : 'warn', 'ไฟล์ที่ยังอยู่บนโฮสต์',
+        $pending === 0 ? 'ไม่มี' : $pending . ' ไฟล์ — ย้ายขึ้น Drive ได้ที่หน้า ที่เก็บไฟล์ Google Drive'
+        . (setting('drive_last_error') !== '' ? ' (ข้อผิดพลาดล่าสุด: ' . setting('drive_last_error') . ')' : ''));
+}
+$tokenFile = drive_token_file();
+$add('Google Drive', is_writable(dirname($tokenFile)) || is_writable($tokenFile) ? 'ok' : 'warn', 'สิทธิ์เขียนไฟล์ token',
+    is_writable(dirname($tokenFile)) || is_writable($tokenFile) ? 'โฟลเดอร์ config เขียนได้' : 'โฟลเดอร์ config เขียนไม่ได้ — เชื่อมต่อ Google Drive ไม่ได้ (ตั้งสิทธิ์ 755)');
 
 // ---------- 4) ความปลอดภัย ----------
 $add('ความปลอดภัย', APP_DEBUG ? 'warn' : 'ok', 'โหมดแสดงข้อผิดพลาด (APP_DEBUG)',
@@ -100,7 +144,7 @@ $probe = function (string $path) use ($scheme, $host): ?int {
     }
     return preg_match('#HTTP/\S+\s+(\d{3})#', $http_response_header[0] ?? '', $m) ? (int)$m[1] : null;
 };
-foreach (['uploads/index.html' => 'โฟลเดอร์ uploads', 'config/db.php' => 'ไฟล์ config/db.php', 'database.sql' => 'ไฟล์ database.sql'] as $p => $label) {
+foreach (['uploads/index.html' => 'โฟลเดอร์ uploads', 'config/db.php' => 'ไฟล์ config/db.php', 'database.sql' => 'ไฟล์ database.sql'] + (is_file(drive_token_file()) ? ['config/drive_token.php' => 'ไฟล์ token ของ Google Drive'] : []) as $p => $label) {
     $code = $probe($p);
     if ($code === null) {
         $add('ความปลอดภัย', 'warn', 'เข้าถึง ' . $label . ' จากเว็บ', 'ตรวจอัตโนมัติไม่ได้ (เซิร์ฟเวอร์เรียกตัวเองไม่ได้) — ลองเปิด ' . url($p) . ' ด้วยเบราว์เซอร์ ต้องขึ้น 403 Forbidden');

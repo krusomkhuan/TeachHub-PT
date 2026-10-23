@@ -288,6 +288,7 @@ require APP_ROOT . '/includes/header.php';
                             สร้างได้ที่ Google Cloud Console → APIs &amp; Services → Credentials → Create OAuth client ID (Web application)
                             แล้วใส่ Redirect URI ด้านบน · ผู้ที่ไม่มีบัญชีจะถูกพาไปกรอกข้อมูลสมัครสมาชิกและต้องรอ admin อนุมัติ
                             · บัญชีเดิมที่อีเมลตรงกันจะเชื่อมกับ Google ให้อัตโนมัติ
+                            · Client เดียวกันนี้ใช้เชื่อมต่อ <a href="<?= e(url('admin/drive.php')) ?>">ที่เก็บไฟล์ Google Drive</a> ได้ด้วย
                             <?php if (site_url_is_local()): ?><br><span class="text-danger">ขณะนี้ URL เป็น localhost — Google รองรับ http://localhost สำหรับทดสอบ แต่ใช้งานจริงต้องเป็น https และตั้ง “URL หลักของระบบ” ให้ถูกต้อง</span><?php endif; ?>
                         </div>
                     </div>

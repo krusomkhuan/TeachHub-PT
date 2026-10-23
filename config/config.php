@@ -11,7 +11,7 @@
 define('APP_DEBUG', true);
 
 define('APP_NAME', 'TeachHub PT');
-define('APP_VERSION', '1.17.0');
+define('APP_VERSION', '1.18.0');
 define('APP_DEVELOPER', 'ครูสมควร สากำ');
 
 // ---------------------------------------------------------------
@@ -85,6 +85,7 @@ require_once APP_ROOT . '/includes/reports.php';
 require_once APP_ROOT . '/includes/pdpa.php';
 require_once APP_ROOT . '/includes/teaching.php';
 require_once APP_ROOT . '/includes/google_auth.php';
+require_once APP_ROOT . '/includes/drive.php';
 require_once APP_ROOT . '/includes/backup.php';
 require_once APP_ROOT . '/includes/board.php';
 require_once APP_ROOT . '/includes/advisor.php';

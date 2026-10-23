@@ -713,7 +713,7 @@ function format_bytes(int $bytes): string
  * ตรวจสอบและบันทึกไฟล์อัปโหลด
  * - ตรวจนามสกุล + MIME type จริงของไฟล์ (finfo)
  * - เปลี่ยนชื่อเป็นชื่อสุ่ม
- * - เก็บในโฟลเดอร์ uploads/{subdir}
+ * - เก็บในโฟลเดอร์ uploads/{subdir} แล้วส่งขึ้น Google Drive ถ้าเปิดใช้ (v1.18 — includes/drive.php)
  *
  * @param array  $file       ข้อมูลจาก $_FILES['xxx']
  * @param string $subdir     โฟลเดอร์ย่อย เช่น lesson_plans, pa, research, supervision
@@ -793,6 +793,8 @@ function handle_upload(array $file, string $subdir, array $allowedExt, int $maxB
     }
     @chmod($dir . DIRECTORY_SEPARATOR . $stored, 0644);
 
+    drive_after_upload($subdir, $stored);
+
     // ตัดชื่อไฟล์ต้นฉบับให้สั้นพอเก็บในฐานข้อมูล
     $original = mb_substr(preg_replace('/[\x00-\x1F\x7F]/u', '', $original), 0, 200);
 
@@ -808,7 +810,7 @@ function handle_upload(array $file, string $subdir, array $allowedExt, int $maxB
     ];
 }
 
-/** ลบไฟล์ใน uploads อย่างปลอดภัย (ป้องกัน path traversal) */
+/** ลบไฟล์ใน uploads อย่างปลอดภัย (ป้องกัน path traversal) — รวมถึงไฟล์ที่เก็บใน Google Drive */
 function delete_upload(string $subdir, ?string $stored): void
 {
     if (!$stored) {
@@ -819,28 +821,37 @@ function delete_upload(string $subdir, ?string $stored): void
     if (is_file($path)) {
         @unlink($path);
     }
+    drive_delete($subdir, basename($stored));
 }
 
 /**
  * ส่งไฟล์ให้ผู้ใช้ดาวน์โหลด/เปิดดู (ใช้ในสคริปต์ดาวน์โหลดที่ตรวจสิทธิ์แล้ว)
+ * ไฟล์บนโฮสต์ส่งตรง ถ้าไม่มีจึงดึงจาก Google Drive
  */
 function send_file(string $subdir, string $stored, string $downloadName, bool $inline = false): void
 {
     $subdir = preg_replace('/[^a-z0-9_]/', '', strtolower($subdir));
     $path = UPLOAD_PATH . DIRECTORY_SEPARATOR . $subdir . DIRECTORY_SEPARATOR . basename($stored);
-    if (!is_file($path)) {
-        abort_page(404, 'ไม่พบไฟล์', 'ไฟล์อาจถูกลบหรือย้ายไปแล้ว');
-    }
     $ext = strtolower(pathinfo($stored, PATHINFO_EXTENSION));
+    $fallback = preg_replace('/[^A-Za-z0-9._-]/', '_', $downloadName);
+    $headers = [
+        'Content-Type: ' . mime_for_ext($ext),
+        'Content-Disposition: ' . ($inline ? 'inline' : 'attachment')
+            . '; filename="' . $fallback . '"; filename*=UTF-8\'\'' . rawurlencode($downloadName),
+        'X-Content-Type-Options: nosniff',
+    ];
+    if (!is_file($path)) {
+        if (!drive_send($subdir, basename($stored), $headers)) {
+            abort_page(404, 'ไม่พบไฟล์', 'ไฟล์อาจถูกลบหรือย้ายไปแล้ว');
+        }
+    }
     if (ob_get_level()) {
         ob_end_clean();
     }
-    $fallback = preg_replace('/[^A-Za-z0-9._-]/', '_', $downloadName);
-    header('Content-Type: ' . mime_for_ext($ext));
+    foreach ($headers as $h) {
+        header($h);
+    }
     header('Content-Length: ' . filesize($path));
-    header('Content-Disposition: ' . ($inline ? 'inline' : 'attachment')
-        . '; filename="' . $fallback . '"; filename*=UTF-8\'\'' . rawurlencode($downloadName));
-    header('X-Content-Type-Options: nosniff');
     header('Cache-Control: private, max-age=0, must-revalidate');
     readfile($path);
     exit;

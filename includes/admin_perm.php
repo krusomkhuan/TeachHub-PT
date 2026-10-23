@@ -57,6 +57,7 @@ function admin_permission_groups(): array
         'ระบบ' => [
             'settings'     => ['ตั้งค่าระบบ', ['admin/settings.php'], true],
             'backup'       => ['สำรอง / กู้คืนข้อมูล', ['admin/backup.php'], true],
+            'drive'        => ['ที่เก็บไฟล์ Google Drive', ['admin/drive.php'], true],
             'logs'         => ['บันทึกการใช้งาน', ['admin/logs.php'], true],
             'system_check' => ['ตรวจสอบระบบ', ['admin/system_check.php'], false],
         ],

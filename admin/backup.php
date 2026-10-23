@@ -57,7 +57,13 @@ if (is_post()) {
         $res = backup_create(isset($_POST['with_files']), post('note'));
         if ($res['ok']) {
             log_activity('backup_create', 'สร้างไฟล์สำรอง ' . $res['name']);
-            flash('success', 'สร้างไฟล์สำรอง ' . $res['name'] . ' เรียบร้อยแล้ว — แนะนำให้ดาวน์โหลดเก็บไว้นอกเซิร์ฟเวอร์ด้วย');
+            $driveErr = drive_backup_copy($res['name']);
+            if (drive_file_row('backups', $res['name'])) {
+                flash('success', 'สร้างไฟล์สำรอง ' . $res['name'] . ' เรียบร้อยแล้ว และส่งสำเนาไปโฟลเดอร์ “สำรองข้อมูล” ใน Google Drive แล้ว');
+            } else {
+                flash($driveErr !== '' ? 'warning' : 'success', 'สร้างไฟล์สำรอง ' . $res['name'] . ' เรียบร้อยแล้ว'
+                    . ($driveErr !== '' ? ' แต่ส่งสำเนาขึ้น Google Drive ไม่สำเร็จ: ' . $driveErr : ' — แนะนำให้ดาวน์โหลดเก็บไว้นอกเซิร์ฟเวอร์ด้วย'));
+            }
         } else {
             flash('error', $res['error']);
         }
@@ -81,7 +87,8 @@ if (is_post()) {
         if ($path) {
             @unlink($path);
             log_activity('backup_delete', 'ลบไฟล์สำรอง ' . basename($path));
-            flash('success', 'ลบไฟล์สำรอง ' . basename($path) . ' แล้ว');
+            flash('success', 'ลบไฟล์สำรอง ' . basename($path) . ' แล้ว'
+                . (drive_file_row('backups', basename($path)) ? ' (สำเนาในโฟลเดอร์ “สำรองข้อมูล” ของ Google Drive ยังอยู่)' : ''));
         }
         redirect($self);
     }
@@ -303,7 +310,8 @@ require APP_ROOT . '/includes/header.php';
                 </tbody>
             </table>
         </div>
-        <div class="form-text">ไฟล์สำรองเก็บที่ uploads/backups (เข้าถึงผ่านเว็บโดยตรงไม่ได้) · ควรดาวน์โหลดเก็บไว้นอกเซิร์ฟเวอร์อย่างสม่ำเสมอ เช่น Google Drive ของงาน</div>
+        <div class="form-text">ไฟล์สำรองเก็บที่ uploads/backups (เข้าถึงผ่านเว็บโดยตรงไม่ได้) · ควรดาวน์โหลดเก็บไว้นอกเซิร์ฟเวอร์อย่างสม่ำเสมอ เช่น Google Drive ของงาน<?php if (drive_table_ready() && ($nDrive = (int)db_value("SELECT COUNT(*) FROM drive_files WHERE subdir <> 'backups'")) > 0): ?>
+            · ไฟล์แนบที่เก็บใน Google Drive (<?= number_format($nDrive) ?> ไฟล์) ไม่รวมอยู่ในไฟล์สำรอง — ยังอยู่ใน Drive และฐานข้อมูลเก็บตำแหน่งไว้<?php endif; ?></div>
     </div>
 </div>
 <?php require APP_ROOT . '/includes/footer.php'; ?>

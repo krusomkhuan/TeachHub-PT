@@ -66,6 +66,7 @@ $menus = [
         'ระบบ' => [
             ['ตั้งค่าระบบ', 'admin/settings.php', 'bi-gear'],
             ['สำรอง / กู้คืนข้อมูล', 'admin/backup.php', 'bi-database-gear'],
+            ['ที่เก็บไฟล์ Google Drive', 'admin/drive.php', 'bi-google'],
             ['บันทึกการใช้งาน', 'admin/logs.php', 'bi-clock-history'],
             ['ตรวจสอบระบบ', 'admin/system_check.php', 'bi-heart-pulse'],
         ],
