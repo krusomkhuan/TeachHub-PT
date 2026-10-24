@@ -204,7 +204,7 @@ if (get_int('evaluate') > 0) {
 
     <div class="row g-3">
     <!-- ฝั่งซ้าย: ไฟล์แผนการจัดการเรียนรู้ (จอกว้างแสดง PDF ในหน้า ติดอยู่กับที่ขณะเลื่อนแบบประเมิน) -->
-    <div class="col-xl-6" id="planFileCol">
+    <div class="col-xl-5" id="planFileCol">
         <div class="card plan-file-panel mb-0">
             <div class="card-header d-flex flex-wrap align-items-center gap-2">
                 <i class="bi bi-file-earmark-text"></i> ไฟล์แผนการจัดการเรียนรู้
@@ -241,7 +241,7 @@ if (get_int('evaluate') > 0) {
     </div>
 
     <!-- ฝั่งขวา: แบบประเมิน -->
-    <div class="col-xl-6" id="evalFormCol">
+    <div class="col-xl-7" id="evalFormCol">
     <button type="button" id="planFileShow" class="btn btn-sm btn-outline-primary mb-3 d-none"><i class="bi bi-layout-split me-1"></i> แสดงไฟล์แผนคู่กับแบบประเมิน</button>
     <form method="post" novalidate id="evalForm">
         <?= csrf_field() ?>
@@ -300,25 +300,30 @@ if (get_int('evaluate') > 0) {
 
         <div class="card mb-4">
             <div class="card-header d-flex flex-wrap align-items-center gap-2"><i class="bi bi-list-check"></i> ตอนที่ 1 การตรวจสอบองค์ประกอบของแผนการจัดการเรียนรู้
-                <span class="ms-auto small fw-normal">รายการที่ต้องมี "มี" ครบ: <strong id="liveCheck">-</strong></span></div>
-            <div class="card-body pb-0 small text-muted">ทำเครื่องหมายตามที่ปรากฏในเล่มแผนการจัดการเรียนรู้ · ช่อง "ไม่เกี่ยวข้อง" ที่แรเงา คือรายการที่ต้องมีทุกรายวิชา</div>
+                <span class="ms-auto small fw-normal">ตอบแล้ว <strong id="doneCheck">-</strong> · รายการที่ต้องมี "มี" ครบ: <strong id="liveCheck">-</strong></span></div>
+            <div class="card-body pb-0 small text-muted">กดเลือกตามที่ปรากฏในเล่มแผน:
+                <span class="pe-key pe-c-yes">มี</span> <span class="pe-key pe-c-no">ไม่มี</span> <span class="pe-key pe-c-na">ไม่เกี่ยวข้อง</span>
+                · รายการที่มีป้าย <span class="badge bg-light text-dark border fw-normal">ต้องมี</span> คือรายการที่ต้องมีทุกรายวิชา (เลือก "ไม่เกี่ยวข้อง" ไม่ได้)</div>
             <?= isset($errors['check']) ? '<div class="alert alert-danger m-3 mb-0">' . e($errors['check']) . '</div>' : '' ?>
             <div class="table-responsive">
-                <table class="table table-bordered mb-0 align-middle mt-2">
-                    <thead class="text-center"><tr><th style="width:44px">ที่</th><th class="text-start">รายการ</th><th style="width:70px">มี</th><th style="width:70px">ไม่มี</th><th style="width:90px">ไม่เกี่ยวข้อง</th></tr></thead>
+                <table class="table table-bordered mb-0 align-middle mt-2 pe-table">
+                    <thead class="text-center"><tr><th style="width:44px">ที่</th><th class="text-start">รายการ</th><th class="pe-h-yes" style="width:66px">มี</th><th class="pe-h-no" style="width:66px">ไม่มี</th><th class="pe-h-na" style="width:80px">ไม่<br>เกี่ยวข้อง</th></tr></thead>
                     <tbody>
                     <?php $lastCat = null; $i = 0; foreach ($checkCriteria as $c): $i++; $cid = (int)$c['id']; $req = (int)$c['is_required'] === 1; ?>
                         <?php if ($c['category'] !== $lastCat): $lastCat = $c['category']; ?>
-                            <tr class="table-light"><td colspan="5" class="fw-semibold text-primary-th"><?= e($c['category']) ?></td></tr>
+                            <tr class="pe-cat"><td colspan="5"><?= e($c['category']) ?></td></tr>
                         <?php endif; ?>
-                        <tr class="<?= is_post() && $checkVal($cid) === '' ? 'table-danger' : '' ?>">
-                            <td class="text-center"><?= $i ?></td>
-                            <td><?= e($c['title']) ?></td>
+                        <tr class="pe-row<?= $i % 2 === 0 ? ' pe-alt' : '' ?><?= is_post() && $checkVal($cid) === '' ? ' pe-missing' : '' ?>">
+                            <td class="text-center pe-no-cell"><?= $i ?></td>
+                            <td><?= e($c['title']) ?><?= $req ? ' <span class="badge bg-light text-dark border fw-normal">ต้องมี</span>' : '' ?></td>
                             <?php foreach (['yes', 'no', 'na'] as $k): ?>
-                                <td class="text-center<?= $k === 'na' && $req ? ' bg-secondary-subtle' : '' ?>">
+                                <td class="pe-cell<?= $k === 'na' && $req ? ' pe-locked' : '' ?>">
                                     <?php if (!($k === 'na' && $req)): ?>
-                                        <input class="form-check-input check-input" type="radio" name="check[<?= $cid ?>]" value="<?= $k ?>" data-required="<?= $req ? 1 : 0 ?>"
-                                               aria-label="<?= e($c['title']) ?> = <?= e(plan_eval_check_labels()[$k]) ?>" <?= $checkVal($cid) === $k ? 'checked' : '' ?>>
+                                        <label class="pe-opt pe-c-<?= $k ?>">
+                                            <input class="check-input" type="radio" name="check[<?= $cid ?>]" value="<?= $k ?>" data-required="<?= $req ? 1 : 0 ?>"
+                                                   aria-label="<?= e($c['title']) ?> = <?= e(plan_eval_check_labels()[$k]) ?>" <?= $checkVal($cid) === $k ? 'checked' : '' ?>>
+                                            <span><?= ['yes' => '<i class="bi bi-check-lg"></i> มี', 'no' => '<i class="bi bi-x-lg"></i> ไม่มี', 'na' => 'ไม่เกี่ยว'][$k] ?></span>
+                                        </label>
                                     <?php endif; ?>
                                 </td>
                             <?php endforeach; ?>
@@ -332,28 +337,31 @@ if (get_int('evaluate') > 0) {
         <div class="card mb-4">
             <div class="card-header d-flex flex-wrap align-items-center gap-2">
                 <i class="bi bi-ui-checks-grid"></i> ตอนที่ 2 การประเมินคุณภาพของแผนการจัดการเรียนรู้
-                <span class="ms-auto small fw-normal">คะแนนรวม: <strong id="liveTotal">-</strong> · ค่าเฉลี่ย: <strong id="liveAvg">-</strong> <span id="liveLevel" class="badge bg-secondary">-</span></span>
+                <span class="ms-auto small fw-normal">ตอบแล้ว <strong id="doneScore">-</strong> · คะแนนรวม: <strong id="liveTotal">-</strong> · ค่าเฉลี่ย: <strong id="liveAvg">-</strong> <span id="liveLevel" class="badge bg-secondary">-</span></span>
             </div>
             <div class="card-body pb-0 small text-muted">
-                <?php foreach (plan_eval_score_labels() as $n => [$label, $meaning]): ?><span class="me-3"><strong><?= $n ?></strong> = <?= e($label) ?></span><?php endforeach; ?>
+                <?php foreach (plan_eval_score_labels() as $n => [$label, $meaning]): ?><span class="pe-key pe-s<?= $n ?> me-1" title="<?= e($meaning) ?>"><?= $n ?> = <?= e($label) ?></span><?php endforeach; ?>
             </div>
             <?= isset($errors['score']) ? '<div class="alert alert-danger m-3 mb-0">' . e($errors['score']) . '</div>' : '' ?>
             <div class="table-responsive">
-                <table class="table table-bordered mb-0 align-middle mt-2">
+                <table class="table table-bordered mb-0 align-middle mt-2 pe-table">
                     <thead><tr class="text-center"><th style="width:44px">ข้อ</th><th class="text-start">รายการประเมิน</th>
-                        <?php foreach (plan_eval_score_labels() as $n => [$label, $meaning]): ?><th style="width:72px" title="<?= e($meaning) ?>"><?= $n ?><div class="small fw-normal"><?= e($label) ?></div></th><?php endforeach; ?></tr></thead>
+                        <?php foreach (plan_eval_score_labels() as $n => [$label, $meaning]): ?><th class="pe-h-s<?= $n ?>" style="width:46px" title="<?= e($label . ': ' . $meaning) ?>"><?= $n ?></th><?php endforeach; ?></tr></thead>
                     <tbody>
                     <?php $lastCat = null; $i = 0; foreach ($qualityCriteria as $c): $i++; $cid = (int)$c['id']; ?>
                         <?php if ($c['category'] !== $lastCat): $lastCat = $c['category']; ?>
-                            <tr class="table-light"><td colspan="7" class="fw-semibold text-primary-th"><?= e($c['category']) ?></td></tr>
+                            <tr class="pe-cat"><td colspan="7"><?= e($c['category']) ?></td></tr>
                         <?php endif; ?>
-                        <tr class="<?= is_post() && $scoreVal($cid) === 0 ? 'table-danger' : '' ?>">
-                            <td class="text-center"><?= $i ?></td>
+                        <tr class="pe-row<?= $i % 2 === 0 ? ' pe-alt' : '' ?><?= is_post() && $scoreVal($cid) === 0 ? ' pe-missing' : '' ?>">
+                            <td class="text-center pe-no-cell"><?= $i ?></td>
                             <td><?= e($c['title']) ?></td>
-                            <?php foreach (array_keys(plan_eval_score_labels()) as $n): ?>
-                                <td class="text-center">
-                                    <input class="form-check-input score-input" type="radio" name="score[<?= $cid ?>]" value="<?= $n ?>"
-                                           aria-label="ข้อ <?= $i ?> = <?= $n ?>" <?= $scoreVal($cid) === $n ? 'checked' : '' ?>>
+                            <?php foreach (plan_eval_score_labels() as $n => [$label, $meaning]): ?>
+                                <td class="pe-cell">
+                                    <label class="pe-opt pe-s<?= $n ?>" title="<?= e($label) ?>">
+                                        <input class="score-input" type="radio" name="score[<?= $cid ?>]" value="<?= $n ?>"
+                                               aria-label="ข้อ <?= $i ?> = <?= $n ?> <?= e($label) ?>" <?= $scoreVal($cid) === $n ? 'checked' : '' ?>>
+                                        <span><?= $n ?></span>
+                                    </label>
                                 </td>
                             <?php endforeach; ?>
                         </tr>
@@ -411,8 +419,46 @@ if (get_int('evaluate') > 0) {
         /* จอกว้าง: แผงไฟล์ติดอยู่ใต้แถบด้านบน สูงเต็มจอ และเลื่อนแยกจากแบบประเมิน */
         @media (min-width: 1200px) {
             .plan-file-panel { position: sticky; top: 76px; height: calc(100vh - 96px); display: flex; flex-direction: column; }
-            #evalFormCol.col-xl-6 .col-md-3, #evalFormCol.col-xl-6 .col-md-4, #evalFormCol.col-xl-6 .col-md-5 { flex: 0 0 auto; width: 50%; }
+            #evalFormCol.col-xl-7 .col-md-3, #evalFormCol.col-xl-7 .col-md-4, #evalFormCol.col-xl-7 .col-md-5 { flex: 0 0 auto; width: 50%; }
         }
+        /* ตารางประเมิน: สีแยกแต่ละตัวเลือกชัดเจน กดได้ทั้งช่อง แถวที่ตอบแล้ว/ยังไม่ตอบดูต่างกัน */
+        .pe-table { --pe-yes: #198754; --pe-no: #dc3545; --pe-na: #6c757d;
+            --pe-s5: #146c43; --pe-s4: #3fa65f; --pe-s3: #e0a800; --pe-s2: #fd7e14; --pe-s1: #dc3545; }
+        .pe-table thead th { background: #eef1f7; font-weight: 700; vertical-align: middle; }
+        .pe-h-yes { color: #198754 !important; } .pe-h-no { color: #dc3545 !important; } .pe-h-na { color: #6c757d !important; font-size: .8rem; line-height: 1.1; }
+        .pe-h-s5 { color: #146c43 !important; } .pe-h-s4 { color: #3fa65f !important; } .pe-h-s3 { color: #b38600 !important; }
+        .pe-h-s2 { color: #d96500 !important; } .pe-h-s1 { color: #dc3545 !important; }
+        .pe-cat td { background: var(--th-primary) !important; color: #fff !important; font-weight: 600; }
+        .pe-row td { background: #fff; transition: background-color .15s; }
+        .pe-row.pe-alt td { background: #edf1f8; }                       /* สลับสีทีละบรรทัดแบบอ่อน */
+        .pe-row.pe-done td:not(.pe-cell) { background: #f1faf4; }
+        .pe-row.pe-alt.pe-done td:not(.pe-cell) { background: #e6f4eb; }
+        .pe-row:hover td:not(.pe-locked) { background: #fff3d6 !important; }
+        .pe-row.pe-done .pe-no-cell { color: #198754; font-weight: 700; }
+        .pe-row.pe-missing td:not(.pe-cell) { background: #fdecee; }
+        .pe-row.pe-missing .pe-no-cell { box-shadow: inset 4px 0 0 #dc3545; }
+        .pe-cell { padding: 3px !important; text-align: center; }
+        .pe-locked { background: repeating-linear-gradient(45deg, #e9ecef, #e9ecef 6px, #dee2e6 6px, #dee2e6 12px) !important; }
+        .pe-opt { display: block; margin: 0; cursor: pointer; }
+        .pe-opt input { position: absolute; opacity: 0; pointer-events: none; }
+        .pe-opt span { display: flex; align-items: center; justify-content: center; gap: 2px; min-height: 38px; border-radius: 8px; padding: 0 2px;
+            border: 2px solid #d5dbe5; color: #8a94a6; background: #fff; font-weight: 600; font-size: .9rem; white-space: nowrap; transition: all .12s; }
+        .pe-opt:hover span { border-color: currentColor; }
+        .pe-opt input:focus-visible + span { outline: 3px solid rgba(13, 110, 253, .45); outline-offset: 1px; }
+        .pe-opt input:checked + span { color: #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, .18); transform: scale(1.04); }
+        .pe-c-yes:hover span { color: #198754; } .pe-c-yes input:checked + span { background: #198754; border-color: #198754; }
+        .pe-c-no:hover span { color: #dc3545; }  .pe-c-no input:checked + span { background: #dc3545; border-color: #dc3545; }
+        .pe-c-na:hover span { color: #6c757d; }  .pe-c-na input:checked + span { background: #6c757d; border-color: #6c757d; }
+        .pe-s5:hover span { color: #146c43; } .pe-s5 input:checked + span { background: #146c43; border-color: #146c43; }
+        .pe-s4:hover span { color: #3fa65f; } .pe-s4 input:checked + span { background: #3fa65f; border-color: #3fa65f; }
+        .pe-s3:hover span { color: #b38600; } .pe-s3 input:checked + span { background: #f2b705; border-color: #f2b705; color: #212529; }
+        .pe-s2:hover span { color: #d96500; } .pe-s2 input:checked + span { background: #fd7e14; border-color: #fd7e14; }
+        .pe-s1:hover span { color: #dc3545; } .pe-s1 input:checked + span { background: #dc3545; border-color: #dc3545; }
+        /* ป้ายอธิบายสีในคำชี้แจง */
+        .pe-key { display: inline-block; padding: 1px 8px; border-radius: 6px; color: #fff; font-weight: 600; font-size: .8rem; }
+        .pe-key.pe-c-yes { background: #198754; } .pe-key.pe-c-no { background: #dc3545; } .pe-key.pe-c-na { background: #6c757d; }
+        .pe-key.pe-s5 { background: #146c43; } .pe-key.pe-s4 { background: #3fa65f; } .pe-key.pe-s3 { background: #f2b705; color: #212529; }
+        .pe-key.pe-s2 { background: #fd7e14; } .pe-key.pe-s1 { background: #dc3545; }
     </style>
     <?php
     // คำนวณคะแนนรวม/ค่าเฉลี่ย/ผ่านเกณฑ์สดขณะกรอก (ผลจริงคำนวณที่เซิร์ฟเวอร์)
@@ -432,6 +478,16 @@ if (get_int('evaluate') > 0) {
                 lv.textContent = l[0]; lv.className = "badge " + l[1];
             } else { el.textContent = "-"; }
             var done = checked.length === total;
+            // ไฮไลต์แถวที่ตอบแล้ว และนับจำนวนที่ตอบ
+            var rowsC = 0, doneC = 0, rowsS = 0, doneS = 0;
+            document.querySelectorAll(".pe-row").forEach(function (tr) {
+                var isScore = !!tr.querySelector(".score-input"), on = !!tr.querySelector("input:checked");
+                tr.classList.toggle("pe-done", on);
+                if (on) { tr.classList.remove("pe-missing"); }
+                if (isScore) { rowsS++; if (on) { doneS++; } } else { rowsC++; if (on) { doneC++; } }
+            });
+            document.getElementById("doneCheck").textContent = doneC + "/" + rowsC;
+            document.getElementById("doneScore").textContent = doneS + "/" + rowsS;
             document.getElementById("livePass").textContent = !done ? "ยังให้คะแนนไม่ครบ" : (a >= ' . PLAN_EVAL_PASS_AVG . ' && yes === req ? "ผ่านเกณฑ์" : "ไม่ผ่านเกณฑ์");
         }
         document.querySelectorAll(".score-input, .check-input").forEach(function (r) { r.addEventListener("change", calc); });
@@ -457,7 +513,7 @@ if (get_int('evaluate') > 0) {
             var fileCol = document.getElementById("planFileCol"), formCol = document.getElementById("evalFormCol"), showBtn = document.getElementById("planFileShow");
             var setHidden = function (h) {
                 fileCol.classList.toggle("d-xl-none", h);
-                formCol.classList.toggle("col-xl-6", !h);
+                formCol.classList.toggle("col-xl-7", !h);
                 showBtn.classList.toggle("d-xl-inline-block", h);
                 try { localStorage.setItem("planEvalHideFile", h ? "1" : "0"); } catch (e) {}
             };
