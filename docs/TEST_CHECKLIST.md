@@ -2,7 +2,7 @@
 
 ใช้ทดสอบหลังติดตั้ง ก่อนเปิดใช้งานจริง และหลังแก้ไขระบบทุกครั้ง
 
-**การเตรียม:** ติดตั้งบนเครื่องทดสอบ นำเข้า `database.sql` + `sample_data.sql`
+**การเตรียม:** ติดตั้งบนเครื่องทดสอบ นำเข้า `database/database.sql` + `database/sample_data.sql`
 บัญชีทดสอบ: `admin` / `admin1234` (บังคับเปลี่ยนรหัส) · `supervisor`, `teacher1` (แผนกไฟฟ้า), `teacher2` (แผนกช่างยนต์), `teacher3`, `executive` (ผู้อำนวยการ), `curriculum` (หัวหน้างานพัฒนาหลักสูตรและการจัดการเรียนรู้), `staff` (เจ้าหน้าที่งานพัฒนาหลักสูตรและการจัดการเรียนรู้), `deputy` (รองผู้อำนวยการฝ่ายวิชาการ) / `teach1234` · `newteacher` (รออนุมัติ)
 เตรียมไฟล์: PDF ปกติ 1 ไฟล์, DOCX 1 ไฟล์, ไฟล์ `.php` ที่เปลี่ยนชื่อเป็น `.pdf`, รูป JPG/PNG 2–3 รูป, ไฟล์ใหญ่เกินกำหนด 1 ไฟล์
 
@@ -232,7 +232,7 @@
 | K1 | `/teachhub_pt/uploads/` และ `/uploads/lesson_plans/` | 403 Forbidden | ☐ |
 | K2 | `/teachhub_pt/uploads/lesson_plans/<ชื่อไฟล์จริง>.pdf` | 403 (ต้องโหลดผ่าน file.php เท่านั้น) | ☐ |
 | K3 | `/teachhub_pt/config/db.php`, `/includes/functions.php` | 403 | ☐ |
-| K4 | `/teachhub_pt/database.sql`, `/sample_data.sql`, `/README.md`, `/.htaccess` | 403 | ☐ |
+| K4 | `/teachhub_pt/database/database.sql`, `/database/sample_data.sql`, `/README.md`, `/.htaccess` | 403 | ☐ |
 
 ---
 

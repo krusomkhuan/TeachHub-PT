@@ -68,7 +68,7 @@ if (is_post()) {
         $errors['phone'] = 'เบอร์โทรศัพท์ไม่ถูกต้อง (ตัวเลข 9-10 หลัก ขึ้นต้นด้วย 0)';
     }
     if (!valid_username($data['username'])) {
-        $errors['username'] = 'ชื่อผู้ใช้ต้องเป็น a-z, 0-9, _ . - ยาว 4-30 ตัว';
+        $errors['username'] = 'ชื่อผู้ใช้ต้องเป็นตัวอักษรภาษาอังกฤษ ยาว 4-30 ตัว (ใช้ตัวเลข 0-9 และ _ . - ได้ แต่ไม่บังคับ) ห้ามมีภาษาไทยหรือช่องว่าง';
     }
     if ($google) {
         // เข้าสู่ระบบด้วย Google จึงไม่ต้องตั้งรหัสผ่าน (สร้างรหัสสุ่มที่ไม่มีใครรู้ไว้แทน)
@@ -233,7 +233,7 @@ require APP_ROOT . '/includes/auth_header.php';
             <label class="form-label" for="username">ชื่อผู้ใช้ <span class="text-danger">*</span></label>
             <input type="text" class="form-control<?= invalid($errors, 'username') ?>" id="username" name="username"
                    value="<?= old('username', $google ? google_suggest_username($google['email']) : '') ?>" maxlength="30" required autocomplete="username">
-            <div class="form-text">a-z, 0-9, _ . - ยาว 4-30 ตัว</div>
+            <div class="form-text">ตัวอักษรภาษาอังกฤษ ยาว 4-30 ตัว เช่น somchai · จะมีตัวเลข 0-9 หรือ _ . - ด้วยหรือไม่ก็ได้</div>
             <?= field_error($errors, 'username') ?>
         </div>
         <?php if (!$google): ?>
