@@ -82,8 +82,9 @@ if (is_post()) {
         if (academic_year_usage($id) > 0) {
             flash('error', 'ลบไม่ได้ เพราะมีรอบการส่ง/งาน/ตารางนิเทศ/กลุ่มที่ปรึกษาอ้างอิงภาคเรียนนี้');
         } else {
+            $ayRow = db_one('SELECT * FROM academic_years WHERE id = ?', 'i', [$id]);
             db_exec('DELETE FROM academic_years WHERE id = ?', 'i', [$id]);
-            log_activity('academic_year_delete', 'ลบภาคเรียน #' . $id);
+            log_activity('academic_year_delete', 'ลบภาคเรียน #' . $id . ($ayRow ? ' ' . $ayRow['semester'] . '/' . $ayRow['year'] : ''));
             flash('success', 'ลบภาคเรียนแล้ว');
         }
         redirect('admin/academic_years.php');

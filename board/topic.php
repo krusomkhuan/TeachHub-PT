@@ -78,6 +78,8 @@ if (is_post()) {
         $errors = board_validate('', $body, false);
         if (!$errors) {
             db_exec('UPDATE board_replies SET body = ? WHERE id = ?', 'si', [$body, (int)$reply['id']]);
+            log_activity('board_edit', 'แก้ไขคำตอบ #' . (int)$reply['id'] . ' ในกระทู้ #' . $id
+                . ((int)$reply['user_id'] !== $uid ? ' (ของ ' . log_user_name((int)$reply['user_id']) . ')' : ''));
             flash('success', 'บันทึกการแก้ไขแล้ว');
             redirect($self . '#reply-' . (int)$reply['id']);
         }
@@ -92,7 +94,8 @@ if (is_post()) {
         }
         db_exec('DELETE FROM board_replies WHERE id = ?', 'i', [(int)$reply['id']]);
         board_refresh_counts($id);
-        log_activity('board_delete', 'ลบคำตอบในกระทู้ #' . $id);
+        log_activity('board_delete', 'ลบคำตอบ #' . (int)$reply['id'] . ' ในกระทู้ #' . $id
+            . ((int)$reply['user_id'] !== $uid ? ' (ของ ' . log_user_name((int)$reply['user_id']) . ')' : ''));
         flash('success', 'ลบคำตอบแล้ว');
         redirect($self);
     }

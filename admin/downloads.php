@@ -64,6 +64,7 @@ if (is_post()) {
     }
     if ($action === 'toggle' && $old) {
         db_exec('UPDATE downloads SET is_active = 1 - is_active WHERE id = ?', 'i', [$id]);
+        log_activity('download_toggle', ($old['is_active'] ? 'ซ่อน' : 'เผยแพร่') . 'เอกสาร #' . $id . ': ' . $old['title']);
         flash('success', 'เปลี่ยนสถานะการเผยแพร่แล้ว');
         redirect('admin/downloads.php');
     }

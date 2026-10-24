@@ -20,6 +20,7 @@ $breadcrumbs = $breadcrumbs ?? [];
 $pageActions = $pageActions ?? '';
 $logo = logo_url();
 $headerAy = current_academic_year();
+visit_track(); // ตัวนับผู้เข้าชม (1 ครั้งต่อคนต่อวัน)
 ?>
 <!DOCTYPE html>
 <html lang="th">

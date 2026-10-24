@@ -152,7 +152,7 @@ function backup_upload_files(): array
             continue;
         }
         $rel = str_replace('\\', '/', substr($f->getPathname(), strlen($base) + 1));
-        if (strpos($rel, 'backups/') === 0) {
+        if (strpos($rel, 'backups/') === 0 || strpos($rel, 'logs/') === 0) { // ไฟล์ Log ไม่สำรอง/กู้คืนทับ (กันประวัติหาย)
             continue;
         }
         $files[$rel] = $f->getPathname();

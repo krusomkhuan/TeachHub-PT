@@ -49,6 +49,7 @@ if (is_post()) {
         'color_primary'       => post('color_primary'),
         'color_accent'        => post('color_accent'),
         'allow_register'      => isset($_POST['allow_register']) ? '1' : '0',
+        'hr_enabled'          => isset($_POST['hr_enabled']) ? '1' : '0', // ระบบงานบุคลากร (ปิด = เห็นเฉพาะผู้ดูแลระบบเต็มสิทธิ์)
         'site_url'            => rtrim(mb_substr(post('site_url'), 0, 200), '/'),
         // เข้าสู่ระบบด้วย Google (Client Secret บันทึกแยก — เว้นว่าง = ใช้ค่าเดิม)
         'google_enabled'        => isset($_POST['google_enabled']) ? '1' : '0',
@@ -114,6 +115,17 @@ if (is_post()) {
     }
 
     if (!$errors) {
+        // log: เก็บเฉพาะค่าที่เปลี่ยน (เดิม → ใหม่) ส่วน Client Secret บอกแค่ว่าเปลี่ยน ไม่เก็บค่า
+        $changed = [];
+        foreach ($d + ['allowed_extensions' => implode(',', $exts)] as $k => $v) {
+            $was = (string)setting($k);
+            if ($was !== (string)$v) {
+                $changed[] = $k . ': ' . mb_substr($was, 0, 40) . ' → ' . mb_substr((string)$v, 0, 40);
+            }
+        }
+        if ($googleSecret !== '') {
+            $changed[] = 'google_client_secret: (เปลี่ยนค่า)';
+        }
         foreach ($d as $k => $v) {
             setting_save($k, (string)$v);
         }
@@ -125,7 +137,8 @@ if (is_post()) {
             delete_upload('system', setting('logo'));
             setting_save('logo', $newLogo);
         }
-        log_activity('settings_update', 'แก้ไขตั้งค่าระบบ' . ($newLogo ? ' (เปลี่ยนโลโก้)' : ''));
+        log_activity('settings_update', 'แก้ไขตั้งค่าระบบ' . ($newLogo ? ' (เปลี่ยนโลโก้)' : '')
+            . ($changed ? ' — ' . implode('; ', $changed) : ($newLogo ? '' : ' (ไม่มีค่าที่เปลี่ยน)')));
         flash('success', 'บันทึกการตั้งค่าเรียบร้อยแล้ว');
         redirect('admin/settings.php');
     }
@@ -242,6 +255,12 @@ require APP_ROOT . '/includes/header.php';
                             <input class="form-check-input" type="checkbox" role="switch" name="allow_register" id="allow_register" value="1"
                                 <?= (is_post() ? isset($_POST['allow_register']) : setting('allow_register', '1') === '1') ? 'checked' : '' ?>>
                             <label class="form-check-label" for="allow_register">เปิดให้ครูสมัครสมาชิกเอง (ต้องรอ admin อนุมัติ)</label>
+                        </div>
+                        <div class="form-check form-switch mt-3">
+                            <input class="form-check-input" type="checkbox" role="switch" name="hr_enabled" id="hr_enabled" value="1"
+                                <?= (is_post() ? isset($_POST['hr_enabled']) : setting('hr_enabled', '0') === '1') ? 'checked' : '' ?>>
+                            <label class="form-check-label" for="hr_enabled">เปิดใช้งานระบบงานบุคลากร</label>
+                            <div class="form-text">ปิดอยู่ = เมนูและหน้างานบุคลากรเห็นเฉพาะผู้ดูแลระบบเต็มสิทธิ์ (ไว้ทดสอบระหว่างพัฒนา) · เปิดเมื่อพัฒนาเสร็จ</div>
                         </div>
                     </div>
                     <div class="col-md-6">

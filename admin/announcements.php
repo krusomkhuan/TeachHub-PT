@@ -46,12 +46,17 @@ if (is_post()) {
     }
     if ($action === 'toggle') {
         db_exec('UPDATE announcements SET is_published = 1 - is_published WHERE id = ?', 'i', [$id]);
+        $ann = db_one('SELECT title, is_published FROM announcements WHERE id = ?', 'i', [$id]);
+        if ($ann) {
+            log_activity('announcement_toggle', ($ann['is_published'] ? 'เผยแพร่' : 'ซ่อน') . 'ประกาศ #' . $id . ': ' . $ann['title']);
+        }
         flash('success', 'เปลี่ยนสถานะการเผยแพร่แล้ว');
         redirect('admin/announcements.php');
     }
     if ($action === 'delete') {
+        $annTitle = (string)db_value('SELECT title FROM announcements WHERE id = ?', 'i', [$id]);
         db_exec('DELETE FROM announcements WHERE id = ?', 'i', [$id]);
-        log_activity('announcement_delete', 'ลบประกาศ #' . $id);
+        log_activity('announcement_delete', 'ลบประกาศ #' . $id . ($annTitle !== '' ? ': ' . $annTitle : ''));
         flash('success', 'ลบประกาศแล้ว');
         redirect('admin/announcements.php');
     }

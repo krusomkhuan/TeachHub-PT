@@ -166,10 +166,10 @@ if (is_post()) {
             }
             $label = $advGroup['group_name'] . ' วันที่ ' . thai_date($meetDate);
             if ($rep) {
-                log_activity('advisor_report_update', 'แก้ไขรายงานครูที่ปรึกษา ' . $label);
+                log_activity('advisor_report_update', 'แก้ไขรายงานครูที่ปรึกษา #' . $repId . ' ' . $label . ' (' . log_status_text($rep['status'], 'pending') . ')');
                 flash('success', 'บันทึกการแก้ไขแล้ว สถานะเป็น "รอตรวจ"');
             } else {
-                log_activity('advisor_report_submit', 'ส่งรายงานครูที่ปรึกษา ' . $label . ($isLate ? ' (ส่งช้า)' : ''));
+                log_activity('advisor_report_submit', 'ส่งรายงานครูที่ปรึกษา #' . $repId . ' ' . $label . ($isLate ? ' (ส่งช้า)' : ''));
                 flash('success', 'ส่งรายงานการพบนักเรียน ' . $label . ' เรียบร้อยแล้ว' . ($isLate ? ' (บันทึกเป็นส่งช้า)' : ''));
             }
             redirect($self . '?id=' . $repId);
@@ -199,6 +199,8 @@ if (is_post()) {
         } else {
             db_exec('DELETE FROM advisor_report_images WHERE id = ?', 'i', [(int)$img['id']]);
             delete_upload('advisor', $img['stored_name']);
+            log_activity('advisor_report_update', 'ลบภาพ #' . (int)$img['id'] . ' ในรายงานกิจกรรมโฮมรูม #' . (int)$rep['id'] . ' ' . $rep['group_name']
+                . ' วันที่ ' . thai_date($rep['meet_date']));
             flash('success', 'ลบภาพแล้ว');
         }
         redirect($self . '?edit=' . (int)$rep['id']);
@@ -215,7 +217,7 @@ if (is_post()) {
             redirect($self . '?id=' . (int)$rep['id']);
         }
         advisor_report_delete($rep);
-        log_activity('advisor_report_delete', 'ลบรายงานครูที่ปรึกษา ' . $rep['group_name'] . ' วันที่ ' . thai_date($rep['meet_date']));
+        log_activity('advisor_report_delete', 'ลบรายงานครูที่ปรึกษา #' . (int)$rep['id'] . ' ' . $rep['group_name'] . ' วันที่ ' . thai_date($rep['meet_date']));
         flash('success', 'ลบรายงานแล้ว');
         redirect($self . '?ay=' . (int)$rep['academic_year_id']);
     }

@@ -86,11 +86,15 @@ function login_user(array $user): void
 
     db_exec('UPDATE users SET last_login_at = NOW() WHERE id = ?', 'i', [(int)$user['id']]);
     log_activity('login', 'เข้าสู่ระบบสำเร็จ', (int)$user['id']);
+    log_purge_maybe(); // ลบ Log เก่ากว่าระยะเวลาเก็บ วันละครั้ง
 }
 
 /** ออกจากระบบ ล้าง session ทั้งหมด */
 function logout_user(): void
 {
+    if (!empty($_SESSION['user_id'])) {
+        presence_clear((int)$_SESSION['user_id']);
+    }
     $_SESSION = [];
     if (ini_get('session.use_cookies')) {
         $p = session_get_cookie_params();
@@ -147,6 +151,7 @@ function require_login(): array
         $next = $_SERVER['REQUEST_URI'] ?? '';
         redirect('auth/login.php' . ($next !== '' ? '?next=' . rawurlencode($next) : ''));
     }
+    presence_touch($user); // ผู้ใช้ออนไลน์ (เขียนฐานข้อมูลไม่เกิน 1 ครั้งต่อนาที)
 
     $script = basename($_SERVER['SCRIPT_NAME'] ?? '');
     if ((int)$user['must_change_password'] === 1 && !in_array($script, ['change_password.php', 'logout.php'], true)) {
@@ -158,6 +163,8 @@ function require_login(): array
     }
     // เจ้าหน้าที่ดูแลระบบ: เปิดได้เฉพาะหน้าที่ได้รับสิทธิ์ (ตรวจฝั่งเซิร์ฟเวอร์ทุกหน้า ไม่ใช่แค่ซ่อนเมนู)
     admin_perm_enforce($user);
+    // ระบบงานบุคลากร: ปิดอยู่ = เปิดหน้า hr/ ได้เฉพาะผู้ดูแลระบบเต็มสิทธิ์
+    hr_enforce_enabled($user);
 
     return $user;
 }

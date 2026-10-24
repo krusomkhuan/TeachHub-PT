@@ -113,7 +113,7 @@ if (is_post()) {
             redirect('teacher/pa.php?id=' . (int)$sub['id']);
         }
         submission_delete($type, $sub);
-        log_activity('delete_pa', 'ลบ PA: ' . $sub['title']);
+        log_activity('delete_pa', 'ลบ PA #' . (int)$sub['id'] . ': ' . $sub['title'] . ' (' . (int)$sub['current_version'] . ' ฉบับ)');
         flash('success', 'ลบ ' . $sub['title'] . ' แล้ว');
         redirect('teacher/pa.php');
     }

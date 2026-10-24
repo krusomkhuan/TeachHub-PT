@@ -475,3 +475,8 @@ a.stat-card:hover { transform: translateY(-3px); color: inherit; }
 }
 
 .pub-navbar .nav-link, .pub-navbar .btn { white-space: nowrap; }
+
+/* ผู้ใช้ออนไลน์ / ข้อความชื่นชม (v1.20) */
+.online-dot { width: 10px; height: 10px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 3px rgba(34, 197, 94, .25); flex-shrink: 0; }
+.cheer-card { border-left: 4px solid var(--th-accent); }
+.cheer-card .cheer-icon { font-size: 2rem; color: var(--th-accent); }

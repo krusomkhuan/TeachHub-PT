@@ -46,9 +46,9 @@ if (is_post()) {
     if ($data['last_name'] === '' || mb_strlen($data['last_name']) > 100) {
         $errors['last_name'] = 'กรุณากรอกนามสกุล';
     }
-    // ตำแหน่งผู้ตรวจงาน (เช่น หัวหน้างานบุคลากร) ให้สิทธิ์ตรวจงาน — กำหนด/เปลี่ยนได้เฉพาะผู้ดูแลระบบ
+    // ตำแหน่งที่ให้สิทธิ์ตามตำแหน่ง (ผู้ตรวจงาน / งานบุคลากร / งานครูที่ปรึกษาและแนะแนว) — กำหนด/เปลี่ยนได้เฉพาะผู้ดูแลระบบ
     if (normalize_position($data['position']) !== normalize_position((string)$user['position'])
-        && (is_reviewer_position($data['position']) || is_reviewer_position((string)$user['position']))) {
+        && (is_privileged_position($data['position']) || is_privileged_position((string)$user['position']))) {
         $errors['position'] = 'ตำแหน่งนี้เกี่ยวข้องกับสิทธิ์ตรวจงาน กำหนดหรือเปลี่ยนได้โดยผู้ดูแลระบบเท่านั้น';
     }
     if (!in_array($data['academic_standing'], academic_standing_options(), true)) {
@@ -176,7 +176,7 @@ require APP_ROOT . '/includes/header.php';
                         </div>
                         <div class="col-md-6">
                             <label class="form-label" for="position">ตำแหน่ง</label>
-                            <?php $lockPos = is_reviewer_position((string)$user['position']); ?>
+                            <?php $lockPos = is_privileged_position((string)$user['position']); ?>
                             <input class="form-control<?= $invalid('position') ?>" name="position" id="position" value="<?= e($val('position')) ?>" maxlength="100" list="positionList"
                                 <?= $lockPos ? 'readonly' : '' ?>>
                             <datalist id="positionList">

@@ -91,6 +91,7 @@ require APP_ROOT . '/includes/header.php';
         <div class="text-muted small"><?= e($user['position']) ?><?= $user['academic_standing'] ? ' · ' . e($user['academic_standing']) : '' ?> · <?= e($user['department_name'] ?? 'ไม่ระบุแผนก') ?></div>
     </div>
 </div>
+<?php require APP_ROOT . '/includes/partials/user_cheer.php'; ?>
 
 <?php if ($unack > 0): ?>
     <div class="alert alert-warning d-flex align-items-center">

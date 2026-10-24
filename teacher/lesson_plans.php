@@ -110,7 +110,7 @@ if (is_post()) {
             redirect('teacher/lesson_plans.php?id=' . (int)$sub['id']);
         }
         submission_delete($type, $sub);
-        log_activity('delete_lesson_plan', 'ลบแผนการสอน: ' . $sub['title']);
+        log_activity('delete_lesson_plan', 'ลบแผนการสอน #' . (int)$sub['id'] . ': ' . $sub['title'] . ' (' . (int)$sub['current_version'] . ' ฉบับ)');
         flash('success', 'ลบแผนการสอน ' . $sub['title'] . ' แล้ว');
         redirect('teacher/lesson_plans.php');
     }

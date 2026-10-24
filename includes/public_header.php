@@ -8,6 +8,10 @@ $pageTitle = $pageTitle ?? 'หน้าแรก';
 $activeNav = $activeNav ?? '';
 check_session_timeout();
 $viewer = current_user();
+visit_track(); // ตัวนับผู้เข้าชม (1 ครั้งต่อคนต่อวัน)
+if ($viewer) {
+    presence_touch($viewer);
+}
 $logo = logo_url();
 
 $navItems = [
@@ -17,6 +21,7 @@ $navItems = [
     'downloads'     => ['ดาวน์โหลดเอกสาร', 'public/downloads.php', 'bi-cloud-download'],
     'docshub'       => ['Docs Hub', 'https://krusomkhuan.com/docshub/', 'bi-journal-text'],
     'prompthub'     => ['Prompt Hub', 'https://krusomkhuan.com/prompthub/public/', 'bi-stars'],
+    'imagehub'      => ['Image Hub', 'https://krusomkhuan.com/docshub/photo-albums.php', 'bi-images'],
     'pdpa'          => ['ข้อตกลง PDPA', 'public/pdpa.php', 'bi-shield-check'],
 ];
 ?>
@@ -61,24 +66,22 @@ $navItems = [
                 <?php foreach ($navItems as $key => [$label, $path, $icon]): ?>
                     <?php $external = str_starts_with($path, 'https://'); // ลิงก์ไปเว็บอื่น เปิดแท็บใหม่ ?>
                     <li class="nav-item">
-                        <a class="nav-link px-xl-3<?= $activeNav === $key ? ' active' : '' ?>" href="<?= e($external ? $path : url($path)) ?>"<?= $external ? ' target="_blank" rel="noopener"' : '' ?>>
-                            <i class="bi <?= e($icon) ?> me-1"></i><?= e($label) ?>
+                        <a class="nav-link px-xl-2 px-xxl-3<?= $activeNav === $key ? ' active' : '' ?>" href="<?= e($external ? $path : url($path)) ?>"<?= $external ? ' target="_blank" rel="noopener"' : '' ?>>
+                            <?php // จอกว้าง (≥1200px) ซ่อนไอคอนเพื่อให้เมนูทั้งหมดอยู่ในแถวเดียว (เมนูมือถือยังแสดงไอคอน) ?>
+                            <i class="bi <?= e($icon) ?> me-1 d-xl-none"></i><?= e($label) ?>
                         </a>
                     </li>
                 <?php endforeach; ?>
             </ul>
-            <div class="d-flex gap-2 ms-xl-3 pb-2 pb-xl-0">
-                <?php if ($viewer): ?>
-                    <a href="<?= e(url(dashboard_url($viewer['role']))) ?>" class="btn btn-accent btn-sm px-3">
-                        <i class="bi bi-speedometer2 me-1"></i> เข้าสู่หน้าทำงาน
-                    </a>
-                <?php else: ?>
+            <?php // ผู้ที่เข้าระบบแล้วไม่แสดงปุ่มในแถบเมนูนี้ / ผู้ที่ยังไม่เข้าระบบแสดงปุ่มเข้าสู่ระบบ-สมัครสมาชิก ?>
+            <?php if (!$viewer): ?>
+                <div class="d-flex gap-2 ms-xl-3 pb-2 pb-xl-0">
                     <a href="<?= e(url('auth/login.php')) ?>" class="btn btn-accent btn-sm px-3"><i class="bi bi-box-arrow-in-right me-1"></i> เข้าสู่ระบบ</a>
                     <?php if (setting('allow_register', '1') === '1'): ?>
                         <a href="<?= e(url('auth/register.php')) ?>" class="btn btn-outline-light btn-sm px-3">สมัครสมาชิก</a>
                     <?php endif; ?>
-                <?php endif; ?>
-            </div>
+                </div>
+            <?php endif; ?>
         </div>
     </div>
 </nav>

@@ -61,8 +61,8 @@ if (is_post()) {
             'ssii',
             [$result, $comment, $uid, (int)$hv['id']]
         );
-        log_activity('home_visit_review', ($result === 'approved' ? 'ผ่าน' : 'ให้แก้ไข') . ': รายงานเยี่ยมบ้าน '
-            . $hv['student_name'] . ' (' . $hv['student_code'] . ') ของ ' . $hv['teacher_name']);
+        log_activity('home_visit_review', ($result === 'approved' ? 'ผ่าน' : 'ให้แก้ไข') . ': รายงานเยี่ยมบ้าน #' . (int)$hv['id'] . ' '
+            . $hv['student_name'] . ' (' . $hv['student_code'] . ') ของ ' . $hv['teacher_name'] . ' (' . log_status_text($hv['status'], $result) . ')');
         flash('success', 'บันทึกผลการตรวจ "' . status_labels()[$result] . '" เรียบร้อยแล้ว');
         $next = db_value(
             "SELECT id FROM home_visits WHERE status = 'pending' AND id <> ? AND (? = 1 OR teacher_id <> ?) ORDER BY submitted_at LIMIT 1",

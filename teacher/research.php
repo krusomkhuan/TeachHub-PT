@@ -142,7 +142,7 @@ if (is_post()) {
             redirect('teacher/research.php?id=' . (int)$sub['id']);
         }
         submission_delete($type, $sub);
-        log_activity('delete_research', 'ลบวิจัย: ' . $sub['title']);
+        log_activity('delete_research', 'ลบวิจัย #' . (int)$sub['id'] . ': ' . $sub['title'] . ' (' . (int)$sub['current_version'] . ' ฉบับ)');
         flash('success', 'ลบงานวิจัยแล้ว');
         redirect('teacher/research.php');
     }

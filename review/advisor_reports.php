@@ -62,8 +62,8 @@ if (is_post()) {
             'ssii',
             [$result, $comment, $uid, (int)$rep['id']]
         );
-        log_activity('advisor_report_review', ($result === 'approved' ? 'ผ่าน' : 'ให้แก้ไข') . ': รายงานครูที่ปรึกษา '
-            . $rep['group_name'] . ' วันที่ ' . thai_date($rep['meet_date']) . ' ของ ' . $rep['teacher_name']);
+        log_activity('advisor_report_review', ($result === 'approved' ? 'ผ่าน' : 'ให้แก้ไข') . ': รายงานครูที่ปรึกษา #' . (int)$rep['id'] . ' '
+            . $rep['group_name'] . ' วันที่ ' . thai_date($rep['meet_date']) . ' ของ ' . $rep['teacher_name'] . ' (' . log_status_text($rep['status'], $result) . ')');
         flash('success', 'บันทึกผลการตรวจ "' . status_labels()[$result] . '" เรียบร้อยแล้ว');
 
         // ไปรายงานรอตรวจรายการถัดไป (ถ้ามี)

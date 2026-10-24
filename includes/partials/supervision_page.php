@@ -270,6 +270,7 @@ if (is_post()) {
         }
         db_exec('DELETE FROM supervision_images WHERE id = ?', 'i', [(int)$img['id']]);
         delete_upload('supervision', $img['stored_name']);
+        log_activity('supervision_image_delete', 'ลบรูปหลักฐาน #' . (int)$img['id'] . ' ของการนิเทศ #' . (int)$sc['id'] . ' ' . $sc['teacher_name']);
         flash('success', 'ลบรูปแล้ว');
         redirect($self . '?record=' . (int)$sc['id']);
     }

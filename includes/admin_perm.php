@@ -33,10 +33,15 @@ function admin_permission_groups(): array
             'supervision_reports'  => ['รายงานการนิเทศ (เสนอ/พิจารณา)',
                 ['reports/supervision_reports.php', 'reports/supervision_report.php', 'reports/supervision_report_print.php'], false],
         ],
-        'งานครูที่ปรึกษา' => [
+        'งานครูที่ปรึกษาและแนะแนว' => [
             'advisor' => ['รายงานกิจกรรมโฮมรูม / เยี่ยมบ้าน / กลุ่มที่ปรึกษา และสรุปรายงาน',
                 ['review/advisor_reports.php', 'review/advisor_groups.php', 'review/home_visits.php', 'reports/advisor_summary.php',
                     'reports/advisor_teacher.php', 'reports/home_visit_summary.php', 'reports/home_visit_teacher.php'], false],
+        ],
+        'งานบุคลากร' => [
+            'hr' => ['งานบุคลากร (ทะเบียนประวัติทุกคน ตรวจสอบใบลา/การอบรม คำสั่ง กิจกรรมวันสำคัญ รายงานสรุป)',
+                ['hr/staff.php', 'hr/leave_review.php', 'hr/leave_quotas.php', 'hr/trainings_review.php',
+                    'hr/orders_manage.php', 'hr/events_manage.php', 'hr/reports.php', 'hr/report_print.php'], true],
         ],
         'กำหนดการ & รายงาน' => [
             'rounds'  => ['รอบการส่งงาน', ['admin/rounds.php'], false],

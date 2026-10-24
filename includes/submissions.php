@@ -373,7 +373,8 @@ function submission_resubmit(string $type, array $sub, int $uid, string $note, s
         delete_upload($up['subdir'], $up['stored_name']);
         throw $ex;
     }
-    log_activity('resubmit_' . $type, 'ส่ง' . submission_type_label($type) . ' ฉบับที่ ' . $version . ': ' . $sub['title']);
+    log_activity('resubmit_' . $type, 'ส่ง' . submission_type_label($type) . ' #' . (int)$sub['id'] . ' ฉบับที่ ' . $version . ': ' . $sub['title']
+        . ' (' . log_status_text((string)$sub['status'], 'pending') . ($isLate ? ', ส่งช้า' : '') . ')');
     return '';
 }
 

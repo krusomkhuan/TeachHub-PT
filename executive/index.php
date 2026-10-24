@@ -60,6 +60,7 @@ $pageActions = ob_get_clean();
 require APP_ROOT . '/includes/header.php';
 ?>
 <?php require APP_ROOT . '/includes/partials/report_alert.php'; ?>
+<?php require APP_ROOT . '/includes/partials/user_cheer.php'; ?>
 
 <div class="row g-3 mb-4">
     <div class="col-sm-6 col-xl">

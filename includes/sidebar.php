@@ -186,7 +186,7 @@ if (in_array($user['role'], teacher_roles(), true)) {
 if (can_manage_advisor($user)) {
     $badgeCounts['review/advisor_reports.php'] = advisor_pending_count($user['role'] === 'admin' ? 0 : (int)$user['id']);
     $badgeCounts['review/home_visits.php'] = home_visit_pending_count($user['role'] === 'admin' ? 0 : (int)$user['id']);
-    $advisorMenu = [$user['role'] === 'admin' ? 'งานครูที่ปรึกษา' : 'งานครูที่ปรึกษา (ตามตำแหน่ง)' => [
+    $advisorMenu = [$user['role'] === 'admin' ? 'งานครูที่ปรึกษาและแนะแนว' : 'งานครูที่ปรึกษาและแนะแนว (ตามตำแหน่ง)' => [
         ['รายงานกิจกรรมโฮมรูม', 'review/advisor_reports.php', 'bi-clipboard-check'],
         ['กลุ่มที่ปรึกษา / วันงดพบ', 'review/advisor_groups.php', 'bi-diagram-3'],
         ['สรุปรายงานกิจกรรมโฮมรูม', 'reports/advisor_summary.php', 'bi-bar-chart-line'],
@@ -218,14 +218,61 @@ if (is_limited_admin($user)) {
 }
 // เจ้าหน้าที่งานครูที่ปรึกษาและแนะแนว: เห็นเฉพาะเมนูงานครูที่ปรึกษา (+ เมนูส่งรายงานของตนเองถ้าเป็นครูที่ปรึกษาด้วย)
 if (is_advisor_staff_only($user)) {
-    $staffMenu = ['งานครูที่ปรึกษา' => $roleMenu['งานครูที่ปรึกษา (ตามตำแหน่ง)'] ?? []];
+    $staffMenu = ['งานครูที่ปรึกษาและแนะแนว' => $roleMenu['งานครูที่ปรึกษาและแนะแนว (ตามตำแหน่ง)'] ?? []];
     if (is_advisor_teacher((int)$user['id']) && isset($roleMenu['ครูที่ปรึกษา (รายงานของฉัน)'])) {
         $staffMenu['ครูที่ปรึกษา (รายงานของฉัน)'] = $roleMenu['ครูที่ปรึกษา (รายงานของฉัน)'];
     }
     $roleMenu = $staffMenu;
 }
+// งานบุคลากร (v1.19): ทุกคนบันทึกข้อมูลของตนเอง / ผู้พิจารณาใบลา / ผู้ดูแลงานบุคลากร / ผู้บริหารดูรายงาน
+// ปิดระบบอยู่ (ตั้งค่าระบบ → hr_enabled): ไม่แสดงเมนู ยกเว้นผู้ดูแลระบบเต็มสิทธิ์ (แสดงป้าย "ปิดอยู่" ไว้ทดสอบ)
+if (hr_available($user)) {
+$hrOffLabel = hr_enabled() ? '' : ' (ปิดอยู่)';
+$hrLeavePending = hr_leave_pending_count($user);
+$badgeCounts['hr/leave_review.php'] = $hrLeavePending;
+$badgeCounts['hr/trainings.php'] = (int)db_value("SELECT COUNT(*) FROM hr_trainings WHERE user_id = ? AND status = 'revision'", 'i', [(int)$user['id']]);
+if (can_manage_hr($user)) {
+    $badgeCounts['hr/trainings_review.php'] = hr_training_pending_count();
+    $roleMenu['งานบุคลากร'] = [
+        ['ทะเบียนประวัติบุคลากร', 'hr/staff.php', 'bi-person-vcard'],
+        ['ตรวจสอบ/พิจารณาใบลา', 'hr/leave_review.php', 'bi-calendar2-check'],
+        ['สิทธิ์วันลาพักผ่อน', 'hr/leave_quotas.php', 'bi-sliders'],
+        ['ตรวจการพัฒนาตนเอง/อบรม', 'hr/trainings_review.php', 'bi-award'],
+        ['คำสั่ง/หนังสือราชการ', 'hr/orders_manage.php', 'bi-file-earmark-text'],
+        ['กิจกรรมวันสำคัญ (เช็คชื่อ)', 'hr/events_manage.php', 'bi-flag'],
+        ['รายงานสรุปบุคลากร', 'hr/reports.php', 'bi-bar-chart-line'],
+    ];
+} else {
+    $hrMenu = [];
+    if ($hrLeavePending > 0 || in_array($user['role'], ['supervisor', 'executive'], true)) {
+        $hrMenu[] = ['พิจารณาใบลา', 'hr/leave_review.php', 'bi-calendar2-check'];
+    }
+    if (can_view_hr_overview($user)) {
+        $hrMenu[] = ['ทะเบียนประวัติบุคลากร', 'hr/staff.php', 'bi-person-vcard'];
+        $hrMenu[] = ['รายงานสรุปบุคลากร', 'hr/reports.php', 'bi-bar-chart-line'];
+    }
+    if ($hrMenu) {
+        $roleMenu['งานบุคลากร'] = $hrMenu;
+    }
+}
+$roleMenu['งานบุคลากร (ของฉัน)'] = [
+    ['ทะเบียนประวัติของฉัน', 'hr/profile.php', 'bi-person-badge'],
+    ['การลา', 'hr/leaves.php', 'bi-calendar-x'],
+    ['พัฒนาตนเอง/อบรม', 'hr/trainings.php', 'bi-mortarboard'],
+    ['กิจกรรมวันสำคัญ', 'hr/events.php', 'bi-flag'],
+    ['คำสั่งที่เกี่ยวกับฉัน', 'hr/orders.php', 'bi-file-earmark-text'],
+];
+if ($hrOffLabel !== '') {
+    foreach (['งานบุคลากร', 'งานบุคลากร (ของฉัน)'] as $hrKey) {
+        if (isset($roleMenu[$hrKey])) {
+            $roleMenu[$hrKey . $hrOffLabel] = $roleMenu[$hrKey];
+            unset($roleMenu[$hrKey]);
+        }
+    }
+}
+}
 // path ของหน้าปัจจุบันเทียบกับ root ของระบบ เช่น admin/users.php
-$currentPath = ltrim(substr(str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? ''), strlen(BASE_URL)), '/');
+$currentPath =ltrim(substr(str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? ''), strlen(BASE_URL)), '/');
 $activeMenu = $activeMenu ?? $currentPath; // หน้าย่อยกำหนด $activeMenu เพื่อไฮไลต์เมนูแม่ได้
 ?>
 <aside class="app-sidebar offcanvas-lg offcanvas-start" tabindex="-1" id="appSidebar" aria-label="เมนูหลัก">
@@ -290,4 +337,4 @@ $activeMenu = $activeMenu ?? $currentPath; // หน้าย่อยกำห�
 </aside>
 <?php
 // ล้างตัวแปรภายในของเมนู ไม่ให้ไปทับตัวแปรชื่อเดียวกันของหน้าที่เรียกใช้
-unset($boardOpen, $advisorMenu, $advisorPos, $reviewTypes, $reviewMenu, $reviewLabels, $rt, $badgeCounts, $menus, $roleMenu, $currentPath, $group, $items, $label, $path, $icon, $exists, $active, $count);
+unset($hrLeavePending, $hrMenu, $boardOpen, $advisorMenu, $advisorPos, $reviewTypes, $reviewMenu, $reviewLabels, $rt, $badgeCounts, $menus, $roleMenu, $currentPath, $group, $items, $label, $path, $icon, $exists, $active, $count);

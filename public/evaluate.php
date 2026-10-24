@@ -103,6 +103,9 @@ if (is_post() && $se && $view === 'form') {
             db()->rollback();
             throw $ex;
         }
+        // ผู้ตอบไม่ระบุตัวตน — บันทึกเฉพาะรายการประเมิน (ไม่เก็บคะแนน/ความคิดเห็นรายคนใน log)
+        log_activity('student_eval_response', 'นักเรียนตอบแบบประเมินโดยนักเรียน #' . (int)$se['id'] . ' ' . $se['subject_name']
+            . ' ' . $se['classroom'] . ' ของ ' . $se['teacher_name'] . ' (คำตอบ #' . $respId . ')');
         // จำว่าเครื่องนี้ประเมินแล้ว
         $_SESSION['student_eval_done'][(int)$se['id']] = 1;
         setcookie(student_eval_cookie((int)$se['id']), '1', [

@@ -898,66 +898,253 @@ function password_policy_error(string $pw): string
 // =====================================================================
 
 /**
- * บันทึกว่า ใคร ทำอะไร เมื่อไร จาก IP ใด
- * @param string   $action  รหัสการกระทำ เช่น login, logout, submit_lesson_plan
- * @param string   $detail  รายละเอียด
+ * บันทึกว่า ใคร ทำอะไร กับอะไร เมื่อไร จาก IP ใด
+ * เก็บ 2 ที่: ตาราง activity_logs (ค้นหาได้ในหน้า admin/logs.php) และไฟล์รายเดือน uploads/logs/activity-YYYY-MM.log
+ * ห้ามส่งรหัสผ่าน token หรือข้อมูลส่วนบุคคลอ่อนไหวมาใน $detail (เลขบัตรประชาชน 13 หลักจะถูกปิดบังให้อัตโนมัติ)
+ * @param string   $action  รหัสการกระทำ เช่น login, logout, submit_lesson_plan (ต้องมีป้ายชื่อใน log_action_groups())
+ * @param string   $detail  รายละเอียด เช่น ชื่องาน #id สถานะเดิม → สถานะใหม่
  * @param int|null $userId  ถ้าไม่ระบุจะใช้ผู้ใช้ที่ล็อกอินอยู่
  */
 function log_activity(string $action, string $detail = '', ?int $userId = null): void
 {
+    $uid = $userId ?? (isset($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : null);
+    $action = mb_substr($action, 0, 100);
+    $detail = mb_substr(log_sanitize($detail), 0, 1000);
+    $ua = mb_substr((string)($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 250);
     try {
-        $uid = $userId ?? (isset($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : null);
-        $ua = mb_substr((string)($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 250);
         db_exec(
             'INSERT INTO activity_logs (user_id, action, detail, ip_address, user_agent) VALUES (?, ?, ?, ?, ?)',
             'issss',
-            [$uid, mb_substr($action, 0, 100), mb_substr($detail, 0, 1000), client_ip(), $ua]
+            [$uid, $action, $detail, client_ip(), $ua]
         );
     } catch (Throwable $ex) {
         // ไม่ให้การบันทึก log ล้มเหลวทำให้ระบบหยุดทำงาน
         error_log('log_activity error: ' . $ex->getMessage());
     }
+    log_write_file($uid, $action, $detail);
+}
+
+/** ปิดบังข้อมูลอ่อนไหวที่อาจหลุดมาในข้อความ log (เลขบัตรประชาชน 13 หลัก) และตัดการขึ้นบรรทัดใหม่ */
+function log_sanitize(string $text): string
+{
+    $text = preg_replace('/(?<!\d)(\d)[- ]?\d{4}[- ]?\d{5}[- ]?\d{2}[- ]?(\d)(?!\d)/', '$1-xxxx-xxxxx-xx-$2', $text) ?? $text;
+    return trim(preg_replace('/[\r\n\t]+/', ' ', $text) ?? $text);
+}
+
+/** ข้อความสถานะเดิม → สถานะใหม่ สำหรับ log เช่น "สถานะ รอตรวจ → ผ่าน" */
+function log_status_text(string $from, string $to): string
+{
+    $labels = status_labels();
+    return 'สถานะ ' . ($labels[$from] ?? $from) . ' → ' . ($labels[$to] ?? $to);
+}
+
+/** ชื่อผู้ใช้สำหรับข้อความ log เช่น "นายสมชาย ใจดี (somchai)" */
+function log_user_name(int $userId): string
+{
+    $u = db_one('SELECT username, prefix, first_name, last_name FROM users WHERE id = ?', 'i', [$userId]);
+    return $u ? trim($u['prefix'] . $u['first_name'] . ' ' . $u['last_name']) . ' (' . $u['username'] . ')' : 'ผู้ใช้ #' . $userId;
+}
+
+/** โฟลเดอร์ไฟล์ Log (อยู่ใต้ uploads/ ซึ่ง .htaccess ปิดการเข้าถึงผ่านเว็บ และมี .htaccess ของตัวเองอีกชั้น) */
+function log_dir(): string
+{
+    $dir = UPLOAD_PATH . DIRECTORY_SEPARATOR . 'logs';
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0755, true);
+    }
+    if (!is_file($dir . DIRECTORY_SEPARATOR . '.htaccess')) {
+        @file_put_contents($dir . DIRECTORY_SEPARATOR . '.htaccess',
+            "Options -Indexes\n<IfModule mod_authz_core.c>\n    Require all denied\n</IfModule>\n<IfModule !mod_authz_core.c>\n    Order deny,allow\n    Deny from all\n</IfModule>\n");
+        @file_put_contents($dir . DIRECTORY_SEPARATOR . 'index.html', '');
+    }
+    return $dir;
+}
+
+/** ไฟล์ Log ทั้งหมด [ชื่อไฟล์ => path] เรียงจากใหม่ไปเก่า */
+function log_files(): array
+{
+    $files = [];
+    foreach (glob(log_dir() . DIRECTORY_SEPARATOR . 'activity-*.log') ?: [] as $path) {
+        if (preg_match('/^activity-\d{4}-\d{2}\.log$/', basename($path))) {
+            $files[basename($path)] = $path;
+        }
+    }
+    krsort($files);
+    return $files;
+}
+
+/** เขียน 1 บรรทัดลงไฟล์ Log ของเดือนปัจจุบัน (หมุนไฟล์รายเดือนตามชื่อไฟล์) */
+function log_write_file(?int $uid, string $action, string $detail): void
+{
+    static $names = [];
+    try {
+        $who = '-';
+        if ($uid) {
+            if (!array_key_exists($uid, $names)) {
+                $names[$uid] = (string)db_value('SELECT username FROM users WHERE id = ?', 'i', [$uid]);
+            }
+            $who = '#' . $uid . ' ' . $names[$uid];
+        }
+        $line = implode(' | ', [date('Y-m-d H:i:s'), client_ip(), $who, $action, log_action_label($action), $detail]) . "\n";
+        @file_put_contents(log_dir() . DIRECTORY_SEPARATOR . 'activity-' . date('Y-m') . '.log', $line, FILE_APPEND | LOCK_EX);
+    } catch (Throwable $ex) {
+        error_log('log_write_file error: ' . $ex->getMessage());
+    }
+}
+
+/** ระยะเวลาเก็บ Log (วัน) — 0 = เก็บถาวร */
+function log_retention_days(): int
+{
+    return max(0, (int)setting('log_retention_days', '365'));
+}
+
+/**
+ * ลบ Log ที่เก่ากว่าระยะเวลาเก็บ ทั้งในฐานข้อมูลและไฟล์รายเดือน
+ * @return int จำนวนรายการในฐานข้อมูลที่ลบ
+ */
+function log_purge_old(int $days): int
+{
+    if ($days <= 0) {
+        return 0;
+    }
+    $n = db_exec('DELETE FROM activity_logs WHERE created_at < (NOW() - INTERVAL ? DAY)', 'i', [$days]);
+    $keepFrom = date('Y-m', strtotime('-' . $days . ' days')); // ไฟล์ของเดือนนี้ยังมีรายการที่อยู่ในระยะเก็บ
+    foreach (log_files() as $name => $path) {
+        if (substr($name, 9, 7) < $keepFrom) {
+            @unlink($path);
+        }
+    }
+    return $n;
+}
+
+/** ลบ Log เก่าอัตโนมัติวันละครั้ง (เรียกตอนเข้าสู่ระบบ/เปิดหน้า Log — ไม่ต้องตั้ง cron) */
+function log_purge_maybe(): void
+{
+    $days = log_retention_days();
+    if ($days <= 0 || time() - (int)setting('log_purge_last', '0') < 86400) {
+        return;
+    }
+    try {
+        setting_save('log_purge_last', (string)time());
+        $n = log_purge_old($days);
+        if ($n > 0) {
+            log_activity('logs_purge', 'ลบ Log อัตโนมัติ (เก่ากว่า ' . $days . ' วัน) จำนวน ' . $n . ' รายการ');
+        }
+    } catch (Throwable $ex) {
+        error_log('log_purge_maybe error: ' . $ex->getMessage());
+    }
+}
+
+/**
+ * หมวดและป้ายชื่อการกระทำใน Log: [รหัสหมวด => [ชื่อหมวด, [action => ป้ายชื่อ]]]
+ * เพิ่ม action ใหม่ต้องเพิ่มป้ายชื่อที่นี่ด้วย (หน้า Log ใช้กรองตามหมวด)
+ */
+function log_action_groups(): array
+{
+    return [
+        'auth' => ['บัญชีและการเข้าสู่ระบบ', [
+            'install' => 'ติดตั้งระบบ', 'login' => 'เข้าสู่ระบบ', 'login_google' => 'เข้าสู่ระบบด้วย Google',
+            'login_failed' => 'เข้าสู่ระบบไม่สำเร็จ', 'logout' => 'ออกจากระบบ', 'session_timeout' => 'หมดเวลาใช้งาน',
+            'register' => 'สมัครสมาชิก', 'change_password' => 'เปลี่ยนรหัสผ่าน', 'forgot_password' => 'ขอรีเซ็ตรหัสผ่าน',
+            'update_profile' => 'แก้ไขโปรไฟล์', 'google_link' => 'เชื่อมบัญชี Google', 'google_unlink' => 'ยกเลิกเชื่อมบัญชี Google',
+            'pdpa_accept' => 'ยอมรับข้อตกลง PDPA',
+        ]],
+        'security' => ['ความปลอดภัย', [
+            'access_denied' => 'เข้าถึงหน้าที่ไม่มีสิทธิ์', 'csrf_failed' => 'CSRF ไม่ถูกต้อง',
+        ]],
+        'submission' => ['ส่งงาน / ตรวจงาน', [
+            'submit_lesson_plan' => 'ส่งแผนการสอน', 'resubmit_lesson_plan' => 'ส่งแผนการสอนฉบับแก้ไข',
+            'delete_lesson_plan' => 'ลบแผนการสอน', 'review_lesson_plan' => 'ตรวจแผนการสอน',
+            'submit_pa' => 'ส่ง PA', 'resubmit_pa' => 'ส่ง PA ฉบับแก้ไข', 'delete_pa' => 'ลบ PA', 'review_pa' => 'ตรวจ PA',
+            'submit_research' => 'ส่งวิจัย', 'resubmit_research' => 'ส่งวิจัยฉบับแก้ไข', 'delete_research' => 'ลบวิจัย',
+            'review_research' => 'ตรวจวิจัย', 'download_file' => 'เปิด/ดาวน์โหลดไฟล์',
+            'teaching_subject_add' => 'เพิ่มรายวิชาที่สอน', 'teaching_subject_delete' => 'ลบรายวิชาที่สอน',
+            'round_create' => 'สร้างรอบการส่ง', 'round_update' => 'แก้ไขรอบการส่ง', 'round_toggle' => 'เปิด/ปิดรอบการส่ง',
+            'round_delete' => 'ลบรอบการส่ง',
+        ]],
+        'plan_eval' => ['ประเมินแผนการจัดการเรียนรู้', [
+            'plan_eval_save' => 'ประเมินแผนฯ', 'plan_eval_delete' => 'ลบผลประเมินแผนฯ', 'plan_eval_ack' => 'รับทราบผลประเมินแผนฯ',
+            'plan_eval_print' => 'พิมพ์แบบประเมินแผนฯ', 'plan_criteria_create' => 'เพิ่มรายการประเมินแผนฯ',
+            'plan_criteria_update' => 'แก้ไขรายการประเมินแผนฯ', 'plan_criteria_delete' => 'ลบรายการประเมินแผนฯ',
+        ]],
+        'supervision' => ['นิเทศการสอน', [
+            'schedule_create' => 'สร้างตารางนิเทศ', 'schedule_update' => 'แก้ไขตารางนิเทศ', 'schedule_cancel' => 'ยกเลิกตารางนิเทศ',
+            'schedule_delete' => 'ลบตารางนิเทศ', 'supervision_record' => 'บันทึกผลนิเทศ', 'supervision_image_delete' => 'ลบภาพการนิเทศ',
+            'supervision_ack' => 'รับทราบผลนิเทศ', 'supervision_print' => 'พิมพ์แบบบันทึกนิเทศ',
+            'criteria_create' => 'เพิ่มหัวข้อประเมินนิเทศ', 'criteria_update' => 'แก้ไขหัวข้อประเมินนิเทศ', 'criteria_delete' => 'ลบหัวข้อประเมินนิเทศ',
+            'student_eval_create' => 'สร้างแบบประเมินโดยนักเรียน', 'student_eval_update' => 'แก้ไขแบบประเมินโดยนักเรียน',
+            'student_eval_delete' => 'ลบแบบประเมินโดยนักเรียน', 'student_eval_response' => 'นักเรียนตอบแบบประเมิน (QR)',
+            'report_create' => 'จัดทำรายงานการนิเทศ', 'report_update' => 'แก้ไขรายงานการนิเทศ', 'report_delete' => 'ลบร่างรายงานการนิเทศ',
+            'report_submit' => 'เสนอรายงานการนิเทศ', 'report_forward' => 'เห็นควรเสนอรายงานการนิเทศ',
+            'report_approve' => 'ทราบ/อนุมัติรายงานการนิเทศ', 'report_return' => 'ส่งกลับรายงานการนิเทศ', 'report_print' => 'พิมพ์รายงานการนิเทศ',
+        ]],
+        'advisor' => ['ครูที่ปรึกษาและแนะแนว', [
+            'advisor_report_submit' => 'ส่งรายงานกิจกรรมโฮมรูม', 'advisor_report_update' => 'แก้ไขรายงานกิจกรรมโฮมรูม',
+            'advisor_report_delete' => 'ลบรายงานกิจกรรมโฮมรูม', 'advisor_report_review' => 'ตรวจรายงานกิจกรรมโฮมรูม',
+            'advisor_group_save' => 'บันทึกกลุ่มที่ปรึกษา', 'advisor_group_delete' => 'ลบกลุ่มที่ปรึกษา',
+            'advisor_skip_save' => 'กำหนดวันงดพบ', 'advisor_skip_delete' => 'ยกเลิกวันงดพบ',
+            'home_visit_submit' => 'ส่งรายงานเยี่ยมบ้าน', 'home_visit_update' => 'แก้ไขรายงานเยี่ยมบ้าน',
+            'home_visit_delete' => 'ลบรายงานเยี่ยมบ้าน', 'home_visit_review' => 'ตรวจรายงานเยี่ยมบ้าน',
+        ]],
+        'hr' => ['งานบุคลากร', [
+            'hr_profile_update' => 'แก้ไขทะเบียนประวัติ', 'hr_profile_verify' => 'ตรวจสอบทะเบียนประวัติ', 'hr_profile_view' => 'ดูทะเบียนประวัติ',
+            'hr_leave_submit' => 'ยื่นใบลา', 'hr_leave_cancel' => 'ยกเลิกใบลา', 'hr_leave_action' => 'พิจารณาใบลา',
+            'hr_leave_record' => 'บันทึกใบลาแทน', 'hr_leave_print' => 'พิมพ์ใบลา', 'hr_quota_save' => 'กำหนดสิทธิ์ลาพักผ่อน',
+            'hr_training_save' => 'บันทึกการอบรม', 'hr_training_delete' => 'ลบรายการอบรม', 'hr_training_review' => 'ตรวจรายการอบรม',
+            'hr_order_save' => 'บันทึกคำสั่ง', 'hr_order_delete' => 'ลบคำสั่ง',
+            'hr_event_save' => 'บันทึกกิจกรรมวันสำคัญ', 'hr_event_delete' => 'ลบกิจกรรมวันสำคัญ',
+            'hr_attend_self' => 'รายงานการเข้าร่วมกิจกรรม', 'hr_attend_save' => 'บันทึกการเข้าร่วมกิจกรรม',
+            'hr_file_view' => 'เปิดไฟล์งานบุคลากร', 'hr_export' => 'ส่งออกข้อมูลงานบุคลากร',
+        ]],
+        'users' => ['จัดการผู้ใช้', [
+            'user_create' => 'เพิ่มผู้ใช้', 'user_update' => 'แก้ไขผู้ใช้', 'user_approve' => 'อนุมัติผู้ใช้',
+            'user_suspend' => 'ระงับผู้ใช้', 'user_activate' => 'เปิดใช้งานผู้ใช้', 'user_delete' => 'ลบผู้ใช้',
+            'user_reset_password' => 'รีเซ็ตรหัสผ่านผู้ใช้', 'reset_request_reject' => 'ปฏิเสธคำขอรีเซ็ตรหัสผ่าน',
+        ]],
+        'master' => ['ข้อมูลพื้นฐาน', [
+            'department_save' => 'บันทึกแผนกวิชา', 'department_delete' => 'ลบแผนกวิชา',
+            'academic_year_save' => 'บันทึกภาคเรียน', 'academic_year_delete' => 'ลบภาคเรียน',
+            'subject_save' => 'บันทึกรายวิชา', 'subject_delete' => 'ลบรายวิชา', 'subject_import' => 'นำเข้ารายวิชา',
+        ]],
+        'content' => ['เนื้อหาเว็บไซต์ / กระดานข่าว', [
+            'announcement_save' => 'บันทึกประกาศ', 'announcement_toggle' => 'เปิด/ปิดแสดงประกาศ', 'announcement_delete' => 'ลบประกาศ',
+            'download_save' => 'บันทึกเอกสารดาวน์โหลด', 'download_toggle' => 'เปิด/ปิดแสดงเอกสารดาวน์โหลด',
+            'download_delete' => 'ลบเอกสารดาวน์โหลด', 'download_category_save' => 'บันทึกหมวดหมู่เอกสาร',
+            'download_category_delete' => 'ลบหมวดหมู่เอกสาร', 'pdpa_update' => 'แก้ไขข้อตกลง PDPA',
+            'board_topic' => 'ตั้งกระทู้', 'board_reply' => 'ตอบกระทู้', 'board_edit' => 'แก้ไขกระทู้/คำตอบ',
+            'board_delete' => 'ลบกระทู้/คำตอบ', 'board_moderate' => 'ดูแลกระทู้ (สถานะ/ปักหมุด)',
+        ]],
+        'system' => ['ระบบ / รายงาน', [
+            'settings_update' => 'แก้ไขตั้งค่าระบบ', 'report_export' => 'ส่งออกรายงาน',
+            'backup_create' => 'สร้างไฟล์สำรอง', 'backup_auto' => 'สำรองข้อมูลอัตโนมัติ', 'backup_download' => 'ดาวน์โหลดไฟล์สำรอง',
+            'backup_delete' => 'ลบไฟล์สำรอง', 'backup_restore' => 'กู้คืนข้อมูล',
+            'drive_connect' => 'เชื่อมต่อ Google Drive', 'drive_disconnect' => 'ยกเลิกเชื่อมต่อ Google Drive',
+            'drive_migrate' => 'ย้ายไฟล์ขึ้น Google Drive', 'drive_pull' => 'ดึงไฟล์จาก Google Drive',
+            'logs_purge' => 'ล้างบันทึกการใช้งาน', 'logs_settings' => 'ตั้งค่าการเก็บบันทึกการใช้งาน',
+            'logs_file_download' => 'ดาวน์โหลดไฟล์ Log',
+        ]],
+    ];
 }
 
 /** ป้ายชื่อการกระทำใน Log */
 function log_action_label(string $action): string
 {
-    $map = [
-        'install' => 'ติดตั้งระบบ', 'login' => 'เข้าสู่ระบบ', 'login_failed' => 'เข้าสู่ระบบไม่สำเร็จ',
-        'logout' => 'ออกจากระบบ', 'register' => 'สมัครสมาชิก', 'change_password' => 'เปลี่ยนรหัสผ่าน',
-        'forgot_password' => 'ขอรีเซ็ตรหัสผ่าน', 'session_timeout' => 'หมดเวลาใช้งาน',
-        'csrf_failed' => 'CSRF ไม่ถูกต้อง', 'update_profile' => 'แก้ไขโปรไฟล์',
-        'access_denied' => 'เข้าถึงหน้าที่ไม่มีสิทธิ์', 'user_approve' => 'อนุมัติผู้ใช้',
-        'user_suspend' => 'ระงับผู้ใช้', 'user_activate' => 'เปิดใช้งานผู้ใช้', 'user_delete' => 'ลบผู้ใช้',
-        'user_create' => 'เพิ่มผู้ใช้', 'user_update' => 'แก้ไขผู้ใช้', 'user_reset_password' => 'รีเซ็ตรหัสผ่านผู้ใช้',
-        'reset_request_reject' => 'ปฏิเสธคำขอรีเซ็ตรหัสผ่าน', 'download_file' => 'ดาวน์โหลดเอกสาร',
-        'round_create' => 'สร้างรอบการส่ง', 'round_update' => 'แก้ไขรอบการส่ง', 'round_toggle' => 'เปิด/ปิดรอบการส่ง',
-        'round_delete' => 'ลบรอบการส่ง', 'submit_lesson_plan' => 'ส่งแผนการสอน', 'resubmit_lesson_plan' => 'ส่งแผนการสอนฉบับแก้ไข',
-        'delete_lesson_plan' => 'ลบแผนการสอน', 'review_lesson_plan' => 'ตรวจแผนการสอน',
-        'review_pa' => 'ตรวจ PA', 'review_research' => 'ตรวจวิจัย',
-        'submit_pa' => 'ส่ง PA', 'resubmit_pa' => 'ส่ง PA ฉบับแก้ไข', 'delete_pa' => 'ลบ PA',
-        'schedule_create' => 'สร้างตารางนิเทศ', 'schedule_update' => 'แก้ไขตารางนิเทศ', 'schedule_cancel' => 'ยกเลิกตารางนิเทศ',
-        'schedule_delete' => 'ลบตารางนิเทศ', 'supervision_record' => 'บันทึกผลนิเทศ', 'supervision_ack' => 'รับทราบผลนิเทศ',
-        'supervision_print' => 'พิมพ์แบบบันทึกนิเทศ', 'criteria_create' => 'เพิ่มหัวข้อประเมิน', 'criteria_update' => 'แก้ไขหัวข้อประเมิน',
-        'criteria_delete' => 'ลบหัวข้อประเมิน', 'report_export' => 'ส่งออกรายงาน', 'settings_update' => 'แก้ไขตั้งค่าระบบ',
-        'logs_purge' => 'ล้างบันทึกการใช้งาน', 'department_save' => 'บันทึกแผนกวิชา', 'department_delete' => 'ลบแผนกวิชา',
-        'academic_year_save' => 'บันทึกภาคเรียน', 'academic_year_delete' => 'ลบภาคเรียน', 'subject_save' => 'บันทึกรายวิชา',
-        'subject_delete' => 'ลบรายวิชา', 'announcement_save' => 'บันทึกประกาศ', 'announcement_delete' => 'ลบประกาศ',
-        'download_save' => 'บันทึกเอกสารดาวน์โหลด', 'download_delete' => 'ลบเอกสารดาวน์โหลด',
-        'student_eval_create' => 'สร้างแบบประเมินโดยนักเรียน', 'student_eval_update' => 'แก้ไขแบบประเมินโดยนักเรียน',
-        'student_eval_delete' => 'ลบแบบประเมินโดยนักเรียน',
-        'report_create' => 'จัดทำรายงานการนิเทศ', 'report_update' => 'แก้ไขรายงานการนิเทศ', 'report_delete' => 'ลบร่างรายงานการนิเทศ',
-        'report_submit' => 'เสนอรายงานการนิเทศ', 'report_forward' => 'เห็นควรเสนอรายงานการนิเทศ', 'report_approve' => 'ทราบ/อนุมัติรายงานการนิเทศ',
-        'report_return' => 'ส่งกลับรายงานการนิเทศ', 'report_print' => 'พิมพ์รายงานการนิเทศ',
-        'submit_research' => 'ส่งวิจัย', 'resubmit_research' => 'ส่งวิจัยฉบับแก้ไข', 'delete_research' => 'ลบวิจัย',
-        'advisor_report_submit' => 'ส่งรายงานครูที่ปรึกษา', 'advisor_report_update' => 'แก้ไขรายงานครูที่ปรึกษา',
-        'advisor_report_delete' => 'ลบรายงานครูที่ปรึกษา', 'advisor_report_review' => 'ตรวจรายงานกิจกรรมโฮมรูม',
-        'advisor_group_save' => 'บันทึกกลุ่มที่ปรึกษา', 'advisor_group_delete' => 'ลบกลุ่มที่ปรึกษา',
-        'advisor_skip_save' => 'กำหนดวันงดพบ', 'advisor_skip_delete' => 'ยกเลิกวันงดพบ',
-        'home_visit_submit' => 'ส่งรายงานเยี่ยมบ้าน', 'home_visit_update' => 'แก้ไขรายงานเยี่ยมบ้าน',
-        'home_visit_delete' => 'ลบรายงานเยี่ยมบ้าน', 'home_visit_review' => 'ตรวจรายงานเยี่ยมบ้าน',
-    ];
+    static $map = null;
+    if ($map === null) {
+        $map = array_merge(...array_map(fn($g) => $g[1], array_values(log_action_groups())));
+    }
     return $map[$action] ?? $action;
+}
+
+/** รหัสหมวดของการกระทำ ('other' = ไม่อยู่ในรายการ) */
+function log_action_group(string $action): string
+{
+    foreach (log_action_groups() as $key => $g) {
+        if (isset($g[1][$action])) {
+            return $key;
+        }
+    }
+    return 'other';
 }
 
 /**

@@ -69,6 +69,7 @@ $pageIcon = 'bi-speedometer2';
 require APP_ROOT . '/includes/header.php';
 ?>
 <?php require APP_ROOT . '/includes/partials/report_alert.php'; ?>
+<?php require APP_ROOT . '/includes/partials/user_cheer.php'; ?>
 
 <div class="alert alert-light border mb-4">
     <i class="bi bi-diagram-3 me-1 text-accent"></i>

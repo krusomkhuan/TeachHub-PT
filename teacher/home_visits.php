@@ -198,7 +198,8 @@ if (is_post()) {
                 throw $ex;
             }
             $label = $d['student_name'] . ' (' . $d['student_code'] . ') วันที่ ' . thai_date($d['visit_date']);
-            log_activity($hv ? 'home_visit_update' : 'home_visit_submit', ($hv ? 'แก้ไข' : 'ส่ง') . 'รายงานเยี่ยมบ้าน ' . $label);
+            log_activity($hv ? 'home_visit_update' : 'home_visit_submit', ($hv ? 'แก้ไข' : 'ส่ง') . 'รายงานเยี่ยมบ้าน #' . $visitId . ' ' . $label
+                . ($hv ? ' (' . log_status_text($hv['status'], 'pending') . ')' : ''));
             flash('success', $hv ? 'บันทึกการแก้ไขแล้ว สถานะเป็น "รอตรวจ"' : 'ส่งรายงานการเยี่ยมบ้าน ' . $label . ' เรียบร้อยแล้ว');
             redirect($self . '?id=' . $visitId);
         }
@@ -221,6 +222,7 @@ if (is_post()) {
         } else {
             db_exec('DELETE FROM home_visit_images WHERE id = ?', 'i', [(int)$img['id']]);
             delete_upload('home_visit', $img['stored_name']);
+            log_activity('home_visit_update', 'ลบภาพ #' . (int)$img['id'] . ' ในรายงานเยี่ยมบ้าน #' . (int)$hv['id'] . ' ' . $hv['student_name']);
             flash('success', 'ลบภาพแล้ว');
         }
         redirect($self . '?edit=' . (int)$hv['id']);
@@ -236,7 +238,7 @@ if (is_post()) {
             redirect($self . '?id=' . (int)$hv['id']);
         }
         home_visit_delete($hv);
-        log_activity('home_visit_delete', 'ลบรายงานเยี่ยมบ้าน ' . $hv['student_name'] . ' (' . $hv['student_code'] . ')');
+        log_activity('home_visit_delete', 'ลบรายงานเยี่ยมบ้าน #' . (int)$hv['id'] . ' ' . $hv['student_name'] . ' (' . $hv['student_code'] . ')');
         flash('success', 'ลบรายงานแล้ว');
         redirect($self . '?year=' . (int)$hv['school_year']);
     }

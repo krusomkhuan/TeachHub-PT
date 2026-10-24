@@ -39,7 +39,8 @@ $add('การอัปโหลด', ini_get('file_uploads') ? 'ok' : 'fail', 
 $add('การอัปโหลด', $phpMax >= max_upload_bytes() ? 'ok' : 'warn', 'ขนาดไฟล์สูงสุด',
     'ตั้งค่าในระบบ ' . format_bytes(max_upload_bytes()) . ' · PHP รับได้ ' . format_bytes($phpMax)
     . ' (upload_max_filesize=' . ini_get('upload_max_filesize') . ', post_max_size=' . ini_get('post_max_size') . ')');
-foreach (['lesson_plans', 'pa', 'research', 'supervision', 'advisor', 'home_visit', 'avatars', 'downloads', 'system'] as $d) {
+log_dir(); // สร้างโฟลเดอร์ uploads/logs (ไฟล์ Log รายเดือน) ถ้ายังไม่มี
+foreach (['lesson_plans', 'pa', 'research', 'supervision', 'advisor', 'home_visit', 'hr', 'avatars', 'downloads', 'system', 'logs'] as $d) {
     $path = UPLOAD_PATH . DIRECTORY_SEPARATOR . $d;
     $ok = is_dir($path) && is_writable($path);
     $add('การอัปโหลด', $ok ? 'ok' : 'fail', 'โฟลเดอร์ uploads/' . $d, $ok ? 'เขียนไฟล์ได้' : 'ไม่มีโฟลเดอร์หรือเขียนไม่ได้ — สร้างโฟลเดอร์และตั้งสิทธิ์ 755');
@@ -55,7 +56,10 @@ $add('ฐานข้อมูล', 'ok', 'เวอร์ชัน MySQL/MariaD
 $charset = (string)db_value('SELECT DEFAULT_CHARACTER_SET_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = DATABASE()');
 $add('ฐานข้อมูล', $charset === 'utf8mb4' ? 'ok' : 'warn', 'Charset ของฐานข้อมูล', $charset . ($charset === 'utf8mb4' ? '' : ' (แนะนำ utf8mb4)'));
 $tables = (int)db_value('SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE()');
-$add('ฐานข้อมูล', $tables >= 39 ? 'ok' : 'fail', 'จำนวนตาราง', $tables . ' ตาราง (ต้องมี 39'
+$add('ฐานข้อมูล', $tables >= 54 ? 'ok' : 'fail', 'จำนวนตาราง', $tables . ' ตาราง (ต้องมี 54'
+    . ($tables === 51 ? ' — ยังไม่ได้นำเข้า update_v1.20.sql (ผู้ใช้ออนไลน์/ตัวนับผู้เข้าชม)' : '')
+    . ($tables === 50 ? ' — ยังไม่ได้นำเข้าส่วนท้ายของ update_v1.19.sql (ผู้เข้าร่วมกิจกรรม)' : '')
+    . ($tables === 39 ? ' — ยังไม่ได้นำเข้า update_v1.19.sql' : '')
     . ($tables === 38 ? ' — ยังไม่ได้นำเข้า update_v1.18.sql' : '')
     . ($tables === 35 ? ' — ยังไม่ได้นำเข้า update_v1.15.sql' : '')
     . ($tables === 34 ? ' — ยังไม่ได้นำเข้า update_v1.14.sql' : '')
@@ -65,6 +69,10 @@ $add('ฐานข้อมูล', $tables >= 39 ? 'ok' : 'fail', 'จำนว
     . ($tables === 20 ? ' — ยังไม่ได้นำเข้า update_v1.1.sql และ update_v1.2.sql' : '')
     . ($tables === 23 ? ' — ยังไม่ได้นำเข้า update_v1.2.sql' : '')
     . ($tables === 25 ? ' — ยังไม่ได้นำเข้า update_v1.6.sql' : '') . ')');
+// v1.21: ระยะเวลาเก็บบันทึกการใช้งาน (ไม่มีแถวตั้งค่า = ยังไม่ได้นำเข้า update_v1.21.sql แต่ระบบใช้ค่าเริ่มต้น 365 วันได้)
+$logSetting = db_value("SELECT setting_value FROM settings WHERE setting_key = 'log_retention_days'");
+$add('ฐานข้อมูล', $logSetting !== null ? 'ok' : 'warn', 'ระยะเวลาเก็บบันทึกการใช้งาน (v1.21)',
+    (log_retention_days() > 0 ? log_retention_days() . ' วัน' : 'เก็บถาวร') . ($logSetting !== null ? '' : ' — ยังไม่ได้นำเข้า update_v1.21.sql (ใช้ค่าเริ่มต้น)'));
 // v1.16: เยี่ยมบ้านนักเรียนคนเดิมได้หลายครั้งต่อปี — ต้องไม่มี UNIQUE (school_year, student_code) แล้ว
 $hvOldUnique = (bool)db_value("SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'home_visits'
                                AND INDEX_NAME = 'uq_home_visit_student_year' LIMIT 1");
@@ -144,7 +152,7 @@ $probe = function (string $path) use ($scheme, $host): ?int {
     }
     return preg_match('#HTTP/\S+\s+(\d{3})#', $http_response_header[0] ?? '', $m) ? (int)$m[1] : null;
 };
-foreach (['uploads/index.html' => 'โฟลเดอร์ uploads', 'config/db.php' => 'ไฟล์ config/db.php', 'database.sql' => 'ไฟล์ database.sql'] + (is_file(drive_token_file()) ? ['config/drive_token.php' => 'ไฟล์ token ของ Google Drive'] : []) as $p => $label) {
+foreach (['uploads/index.html' => 'โฟลเดอร์ uploads', 'uploads/logs/index.html' => 'โฟลเดอร์ไฟล์ Log (uploads/logs)', 'config/db.php' => 'ไฟล์ config/db.php', 'database.sql' => 'ไฟล์ database.sql'] + (is_file(drive_token_file()) ? ['config/drive_token.php' => 'ไฟล์ token ของ Google Drive'] : []) as $p => $label) {
     $code = $probe($p);
     if ($code === null) {
         $add('ความปลอดภัย', 'warn', 'เข้าถึง ' . $label . ' จากเว็บ', 'ตรวจอัตโนมัติไม่ได้ (เซิร์ฟเวอร์เรียกตัวเองไม่ได้) — ลองเปิด ' . url($p) . ' ด้วยเบราว์เซอร์ ต้องขึ้น 403 Forbidden');

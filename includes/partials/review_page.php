@@ -47,7 +47,8 @@ if (is_post()) {
 
     if (!$errors) {
         submission_review($type, $sub, $result, $comment, (int)$user['id']);
-        log_activity('review_' . $type, ($result === 'approved' ? 'ผ่าน' : 'ให้แก้ไข') . ': ' . $sub['title'] . ' ของ ' . $sub['teacher_name']);
+        log_activity('review_' . $type, ($result === 'approved' ? 'ผ่าน' : 'ให้แก้ไข') . ': ' . submission_type_label($type) . ' #' . (int)$sub['id']
+            . ' ' . $sub['title'] . ' ฉบับที่ ' . (int)$sub['current_version'] . ' ของ ' . $sub['teacher_name'] . ' (' . log_status_text($sub['status'], $result) . ')');
         flash('success', 'บันทึกผลการตรวจ "' . status_labels()[$result] . '" เรียบร้อยแล้ว');
 
         // ไปงานรอตรวจรายการถัดไปในขอบเขตเดียวกัน (ถ้ามี)

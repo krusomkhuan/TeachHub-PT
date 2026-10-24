@@ -33,7 +33,7 @@ if (is_post()) {
             } else {
                 db_insert('INSERT INTO departments (code, name, is_active) VALUES (?, ?, ?)', 'ssi', [$code, $name, $active]);
             }
-            log_activity('department_save', ($id ? 'แก้ไข' : 'เพิ่ม') . $name);
+            log_activity('department_save', ($id ? 'แก้ไข #' . $id . ' ' : 'เพิ่ม') . $name . ' (รหัส ' . $code . ($active ? '' : ', ปิดใช้งาน') . ')');
             flash('success', 'บันทึก' . $name . 'แล้ว');
             redirect('admin/departments.php');
         }
@@ -43,8 +43,9 @@ if (is_post()) {
         if ($used > 0) {
             flash('error', 'ลบไม่ได้ เพราะมีผู้ใช้หรือรายวิชาในแผนกนี้ (ใช้การปิดใช้งานแทน)');
         } else {
+            $deptName = (string)db_value('SELECT name FROM departments WHERE id = ?', 'i', [$id]);
             db_exec('DELETE FROM departments WHERE id = ?', 'i', [$id]);
-            log_activity('department_delete', 'ลบแผนก #' . $id);
+            log_activity('department_delete', 'ลบแผนก #' . $id . ' ' . $deptName);
             flash('success', 'ลบแผนกแล้ว');
         }
         redirect('admin/departments.php');

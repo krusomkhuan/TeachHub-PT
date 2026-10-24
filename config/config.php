@@ -11,7 +11,7 @@
 define('APP_DEBUG', true);
 
 define('APP_NAME', 'TeachHub PT');
-define('APP_VERSION', '1.18.0');
+define('APP_VERSION', '1.21.0');
 define('APP_DEVELOPER', 'ครูสมควร สากำ');
 
 // ---------------------------------------------------------------
@@ -91,6 +91,8 @@ require_once APP_ROOT . '/includes/board.php';
 require_once APP_ROOT . '/includes/advisor.php';
 require_once APP_ROOT . '/includes/home_visit.php';
 require_once APP_ROOT . '/includes/plan_eval.php';
+require_once APP_ROOT . '/includes/hr.php';
+require_once APP_ROOT . '/includes/presence.php';
 
 // ส่ง header ความปลอดภัยพื้นฐาน
 if (!headers_sent()) {

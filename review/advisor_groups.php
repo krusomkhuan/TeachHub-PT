@@ -213,7 +213,7 @@ $wedOptions = array_filter(advisor_wednesdays($ay, false), fn($r) => $r === null
 
 $pageTitle = 'กลุ่มที่ปรึกษา / วันงดพบ';
 $pageIcon = 'bi-diagram-3';
-$breadcrumbs = ['งานครูที่ปรึกษา' => 'review/advisor_reports.php', 'กลุ่มที่ปรึกษา' => null];
+$breadcrumbs = ['งานครูที่ปรึกษาและแนะแนว' => 'review/advisor_reports.php', 'กลุ่มที่ปรึกษา' => null];
 require APP_ROOT . '/includes/header.php';
 ?>
 <div class="card mb-4">

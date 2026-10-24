@@ -152,6 +152,42 @@ require APP_ROOT . '/includes/public_header.php';
                 </div>
             </div>
 
+            <?php
+            // นับหลัง public_header (visit_track) เพื่อให้รวมการเข้าชมครั้งนี้ด้วย
+            $visits = visit_stats();
+            $onlineCount = presence_online_count();
+            $onlineUsers = $viewer ? presence_online_users(30) : [];
+            ?>
+            <h4 class="section-title">สถิติผู้เข้าชม</h4>
+            <div class="card mb-4">
+                <div class="card-body">
+                    <div class="row g-2 text-center">
+                        <?php foreach (['today' => 'วันนี้', 'month' => 'เดือนนี้', 'total' => 'ทั้งหมด'] as $k => $label): ?>
+                            <div class="col-4">
+                                <div class="fs-4 fw-bold text-primary-th"><?= number_format($visits[$k]) ?></div>
+                                <div class="small text-muted"><?= e($label) ?></div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                    <hr>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="online-dot"></span>
+                        <span>ผู้ใช้ออนไลน์ขณะนี้ <strong><?= number_format($onlineCount) ?></strong> คน</span>
+                    </div>
+                    <?php if ($onlineUsers): ?>
+                        <div class="d-flex flex-wrap gap-1 mt-2">
+                            <?php foreach ($onlineUsers as $ou): ?>
+                                <img src="<?= e(avatar_url($ou)) ?>" alt="<?= e(full_name($ou)) ?>" class="avatar-sm"
+                                     title="<?= e(full_name($ou) . ($ou['department_name'] ? ' · ' . $ou['department_name'] : '')) ?>"
+                                     data-bs-toggle="tooltip">
+                            <?php endforeach; ?>
+                        </div>
+                    <?php elseif (!$viewer && $onlineCount > 0): ?>
+                        <div class="small text-muted mt-1">เข้าสู่ระบบเพื่อดูรายชื่อผู้ที่ออนไลน์</div>
+                    <?php endif; ?>
+                </div>
+            </div>
+
             <div class="d-flex align-items-center mb-3">
                 <h4 class="section-title mb-0">ดาวน์โหลดแบบฟอร์ม</h4>
                 <a href="<?= e(url('public/downloads.php')) ?>" class="ms-auto small">ทั้งหมด <i class="bi bi-arrow-right"></i></a>

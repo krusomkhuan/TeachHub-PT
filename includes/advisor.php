@@ -30,6 +30,16 @@ function is_advisor_staff(array $user): bool
     return in_array(normalize_position((string)($user['position'] ?? '')), advisor_staff_positions(), true);
 }
 
+/**
+ * ตำแหน่งที่ให้สิทธิ์พิเศษตามตำแหน่ง (ผู้ตรวจงาน / งานบุคลากร / งานครูที่ปรึกษาและแนะแนว)
+ * ผู้ใช้เปลี่ยนเป็นหรือเปลี่ยนออกจากตำแหน่งเหล่านี้เองไม่ได้ — กำหนดได้เฉพาะผู้ดูแลระบบ (admin/user_edit.php)
+ */
+function is_privileged_position(string $position): bool
+{
+    return is_reviewer_position($position) || is_hr_staff_position($position)
+        || in_array(normalize_position($position), advisor_staff_positions(), true);
+}
+
 /** ตำแหน่งที่เห็นเฉพาะเมนูงานครูที่ปรึกษา (ไม่เห็นเมนูส่งงาน/นิเทศของครู) */
 const ADVISOR_STAFF_ONLY_POSITION = 'เจ้าหน้าที่งานครูที่ปรึกษาและแนะแนว';
 
